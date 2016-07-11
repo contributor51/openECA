@@ -20,17 +20,14 @@
 //       Generated original version of source code.
 //
 //*****************************************************************************************************@
-@using openECAClient
 @using openECAClient.Model
 @using RazorEngine.Templating
 @inherits TemplateBase<AppModel>
-
 @{
     Layout = "Layout.cshtml";
     ViewBag.Title = "Manage Data Mappings";
-
 }
-@section StyleSheets{
+@section StyleSheets {
     <style>
         .row {
             margin-top: 10px;
@@ -38,6 +35,7 @@
         }
     </style>
 }
+
 <div class="row">
     <div class="col-md-2">
         <label for="types">Type:</label>
@@ -65,63 +63,120 @@
 <div class="row">
     <div class="col-md-12">
         <label for="userdefinedmappings">User Defined Mappings:</label>
+        <p id="filelocation">File Location: </p>
         <table class="table" id="userdefinedmappings">
             <thead>
-            <tr><th>Type</th><th>Identifier</th><th>Mappings</th><th></th></tr>
+            <tr>
+                <th>Type</th>
+                <th>Identifier</th>
+                <th>Mappings</th>
+                <th></th>
+            </tr>
             </thead>
             <tbody></tbody>
         </table>
     </div>
 </div>
 
-<!-- Modal -->
-<div id="myModal" class="modal fade" role="dialog">
-    <div class="modal-dialog">
-
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h4 class="modal-title">Signal Pick</h4>
-            </div>
-            <div class="modal-body">
-                <p>Some text in the modal.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+<div id="errors">
+    <div id="modal-errors" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="confirm-modal" aria-hidden="true">
+        <div class="modal-vertical-align-container">
+            <div class="modal-dialog modal-vertical-align-center">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <a class="close" data-dismiss="modal">×</a>
+                        <h4>Errors</h4>
+                    </div>
+                    <div class="modal-body" style="max-height: 500px; overflow-y: auto"></div>
+                    <div class="modal-footer">
+                        <input type="button" id="save-errors" class="btn" value="Save" />
+                        <input type="button" class="btn" value="Close" data-dismiss="modal" />
+                    </div>
+                </div>
             </div>
         </div>
-
     </div>
 </div>
+
+<!-- Do not delete, used to append dynamic modals to-->
+<div id="modals"></div>
+
 @section Scripts {
     <script>
+        "use strict";
+
         var udts = [];
         var mappings = [];
+        var parentDevice = [];
+        var deviceData = [];
+        var measurementDetails = [];
+        var errorList = [];
         var re = /^[A-Za-z_][A-Za-z_0-9]*$/;
-        $(function () {
 
+        $(function () {
             $('#addnewmapping').attr('disabled', 'disabled');
 
-            $(window).bind('beforeunload', function (event) {
-                var flag = false;
-                $.each($('input[type=text]'), function (i, d) {
-                    if ($(d).val() != '')
-                        flag = true;
-                });
+            //$(window).bind('beforeunload', function (event) {
+            //    var flag = false;
+            //    $.each($('input[type=text]'), function (i, d) {
+            //        if ($(d).val() != '')
+            //            flag = true;
+            //    });
 
-                if (flag) {
-                    return "There is unsaved data on this page.  If you were editing a mapping and leave now the changes will be lost.";
-                }
+            //    if (flag) {
+            //        return "There is unsaved data on this page.  If you were editing a mapping and leave now the changes will be lost.";
+            //    }
 
-                return undefined;
-            });
-
+            //    return undefined;
+            //});
 
             $(window).on("hubConnected", function (event) {
+                dataHub.initializeSubscriptions().fail(function (error) {
+                    showErrorMessage(error);
+                });
+                
+                dataHub.getMappingFileDirectory().done(function (directory) {
+                    $('#filelocation').append(directory);
+                });
+
                 GetData();
             });
             
+            // Client function called from the dataHub when meta data gets recieved
+            dataHubClient.metaDataReceived = function () {
+                dataHub.getDeviceDetails().done(function (data) {
+                    deviceData = data;
+
+                    deviceData.sort(function (a, b) {
+                        if (a.Acronym > b.Acronym) return 1;
+                        if (a.Acronym < b.Acronym) return -1;
+
+                        return 0;
+                    });
+
+                    if (deviceData.length && measurementDetails.length)
+                        $('.btn-select-measurements').prop('disabled', false);
+                }).fail(function (error) {
+                    showErrorMessage(error);
+                });
+
+                dataHub.getMeasurementDetails().done(function (data) {
+                    measurementDetails = data;
+
+                    measurementDetails.sort(function (a, b) {
+                        if (a.ID > b.ID) return 1;
+                        if (a.ID < b.ID) return -1;
+
+                        return 0;
+                    });
+
+                    if (deviceData.length && measurementDetails.length)
+                        $('.btn-select-measurements').prop('disabled', false);
+                }).fail(function (error) {
+                    showErrorMessage(error);
+                });
+            }
+
             $('#types').on('change', function (e) {
                 UpdateTypeMappings();
             });
@@ -130,43 +185,54 @@
                 if (re.test($('#identifier').val())) {
                     $('#identifier').css('border-color', '');
                     $('#addnewmapping').removeAttr('disabled');
-                }
-                else {
+                } else {
                     $('#identifier').css('border-color', 'red');
                     $('#addnewmapping').attr('disabled', 'disabled');
                 }
             });
 
-
             $('#addnewmapping').on('click', function (event) {
                 if (MappingValidation()) {
-                    
-                    for (var i = 0; i < mappings.length; ++i) {
-                        if (mappings[i].Identifier.toLowerCase() == $('#identifier').val().toLowerCase()) {
+                    let i;
+
+                    for (i = 0; i < mappings.length; ++i) {
+                        if (mappings[i].Identifier.toLowerCase() === $('#identifier').val().toLowerCase()) {
                             alert("Please use a unique Identifier!");
                             return;
                         }
                     }
 
-                    var vals = $('#types').val().split('~');
-                    var index;
-                    for (var i = 0; i < udts.length; ++i) {
-                        if (vals[0] == udts[i].Category && vals[1] == udts[i].Identifier) {
+                    const vals = $('#types').val().split('~');
+                    let index = 0;
+
+                    for (i = 0; i < udts.length; ++i) {
+                        if (vals[0] === udts[i].Category && vals[1] === udts[i].Identifier)
                             index = i;
+                    }
+
+                    const fieldMappings = [];
+
+                    for (i = 0; i < udts[index].Fields.length; ++i) {
+                        var expressions = "";
+
+                        if (Array.isArray($('#input' + udts[index].Fields[i].Identifier).val())) {
+                            $.each($('#input' + udts[index].Fields[i].Identifier).val(), function (j, field) {
+                                expressions += field + ';';
+                            });
+                        } else {
+                            expressions = $('#input' + udts[index].Fields[i].Identifier).val();
                         }
+
+                        fieldMappings.push({ 'Field': udts[index].Fields[i], 'Expression': expressions });
                     }
 
-                    var fieldMappings = [];
-                    for (var i = 0; i < udts[index].Fields.length; ++i) {
-                        fieldMappings.push({ 'Field': udts[index].Fields[i], 'Expression': $('#input' + i).val() });
-                    }
-                    var newMapping = { 'Type': udts[index], 'Identifier': $('#identifier').val(), 'FieldMappings': fieldMappings };
-
+                    const newMapping = { 'Type': udts[index], 'Identifier': $('#identifier').val(), 'FieldMappings': fieldMappings };
 
                     dataHub.addMapping(newMapping).done(function () {
                         GetData();
+                    }).fail(function (error) {
+                        showErrorMessage(error);
                     });
-
                 }
             });
         });
@@ -174,183 +240,337 @@
         function GetData() {
             udts = [];
             mappings = [];
+
             $('#identifier').val("");
             $('#types').empty();
             $('#userdefinedmappings tbody').empty();
-            dataHub.getDefinedTypes().done(function (data) {
-                //console.log(data);
-                $.each(data, function (i, d) {
-                    if (d.IsUserDefined) {
-                        $('#types').append($('<option />').val(d.Category + '~' + d.Identifier + '~' + d.IsArray + '~' + d.IsUserDefined + '~' + i).text(d.Category + ' ' + d.Identifier));
-                        udts.push(d);
-                    }
 
+            dataHub.getDefinedTypes().done(function (data) {
+                $.each(data, function (i, dataType) {
+                    if (dataType.IsUserDefined) {
+                        $('#types').append($('<option />').val(dataType.Category + '~' + dataType.Identifier + '~' + dataType.IsArray + '~' + dataType.IsUserDefined + '~' + i).text(dataType.Category + ' ' + dataType.Identifier));
+                        udts.push(dataType);
+                    }
                 });
-                console.log(udts);
 
                 UpdateTypeMappings();
 
                 dataHub.getDefinedMappings().done(function (data) {
-                    $.each(data, function (i, d) {
+                    $.each(data, function (i, typeMapping) {
                         var fieldsString = '';
-                        mappings.push(d);
-                        $.each(d.FieldMappings, function (i, fms) {
-                            fieldsString += fms.Field.Identifier + ' to ' + fms.Expression;
-                            if (i < d.FieldMappings.length - 1)
+
+                        mappings.push(typeMapping);
+
+                        $.each(typeMapping.FieldMappings, function (i, fieldMapping) {
+                            fieldsString += fieldMapping.Field.Identifier + ' to ' + fieldMapping.Expression;
+                            if (i < typeMapping.FieldMappings.length - 1)
                                 fieldsString += ', ';
                         });
-                        $('#userdefinedmappings tbody').append($('<tr><td>' + d.Type.Category + ' ' + d.Type.Identifier + '</td><td>' + d.Identifier + '</td><td>' + fieldsString + '</td><td><button id="updatebtn' + i + '"class="btn btn-link"><span class="glyphicon glyphicon-pencil"></span></button><button id="btn' + i + '" class="btn btn-link"><span class="glyphicon glyphicon-remove-sign"></span></button></td></tr>'));
+
+                        $('#userdefinedmappings tbody').append($('<tr><td>' + typeMapping.Type.Category + ' ' + typeMapping.Type.Identifier + '</td><td>' + typeMapping.Identifier + '</td><td>' + fieldsString + '</td><td><button id="updatebtn' + i + '"class="btn btn-link" hub-dependent><span class="glyphicon glyphicon-pencil"></span></button><button id="btn' + i + '" class="btn btn-link" hub-dependent><span class="glyphicon glyphicon-remove-sign"></span></button></td></tr>'));
+
                         $('#btn' + i).one('click', function (e) {
-                            RemoveMapping(d);
+                            RemoveMapping(typeMapping);
                         });
+
                         $('#updatebtn' + i).on('click', function (e) {
-                            UpdateMapping(d);
+                            UpdateMapping(typeMapping);
                         });
-
                     });
 
+                }).fail(function (error) {
+                    showErrorMessage(error);
                 });
-
-            });
-
-        }
-        
-        function UpdateTypeMappings() {
-            var vals = $('#types').val().split('~');
-
-            for (var i = 0; i < udts.length; ++i) {
-                if (vals[0] == udts[i].Category && vals[1] == udts[i].Identifier) {
-                    $('#fields').empty();
-                    $.each(udts[i].Fields, function (j, f) {
-                        console.log(f);
-                        if (f.Type.IsArray == true) {
-                            if (f.Type.UnderlyingType.IsUserDefined == true) {
-                                $('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><select id="input' + j + '" class="form-control"></select></li>'));
-                                dataHub.getDefinedMappings().done(function (data) {
-                                    $.each(data, function (k, d) {
-                                        if (f.Type.UnderlyingType.Category == d.Type.Category && f.Type.UnderlyingType.Identifier == d.Type.Identifier)
-                                            $('#input' + j).append($('<option />').val(d.Identifier).text(d.Identifier));
-                                    });
-                                    $('#input' + j).multiselect();
-
-                                });
-
-                            } else {
-                                $('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><input id="input' + j + '" class="form-control" type="text"/></li>'));
-                            }
-                        } else {
-                            if (f.Type.IsUserDefined == true) {
-                                $('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><select id="input' + j + '" class="form-control"></select></li>'));
-                                dataHub.getDefinedMappings().done(function (data) {
-                                    console.log(data);
-                                    $.each(data, function (k, d) {
-                                        if (f.Type.Category == d.Type.Category && f.Type.Identifier == d.Type.Identifier)
-                                            $('#input' + j).append($('<option />').val(d.Identifier).text(d.Identifier));
-                                    });
-                                });
-
-                            } else {
-                                $('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><input id="input' + j + '" class="form-control" type="text"/></li>'));
-
-                            }
-
-                        }
-                        //$('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><input id="input' + j + '" class="form-control" type="text"/></li>'));
-
-                    });
-                }
-            }
-
-        }
-
-        function RemoveMapping(data) {
-                dataHub.removeMapping(data).done(function () {
-                    GetData();
-                });
-        
-        }
-        
-        function UpdateMapping(data) {
-
-                dataHub.removeMapping(data);
-                for (var i = 0; i < mappings.length; ++i) {
-                    if (mappings[i].Identifier == data.Identifier)
-                        mappings.splice(i, 1);
-                }
-                $('#identifier').val(data.Identifier);
-                $('#types option').filter(function () {
-                    return ($(this).text() == data.Type.Category + ' ' + data.Type.Identifier); //To select Blue
-                }).prop('selected', true);
-                UpdateTypeMappings();
-                $.each($('#fields input[type="text"]'), function (i, d) {
-                    $(d).val(data.FieldMappings[i].Expression);
-                });
-
-           
-        }
-
-        
-        // Functions that validates that the input fields have text
-        function MappingValidation() {
-            var alerts = 0;
-            $.each($('input[type=text]'), function (i, d) {
-                if ($(d).val() == '') {
-                    $(d).css('border-color', 'red');
-                    ++alerts;
-                }
-                else
-                    $(d).css('border-color', '');
-            });
-
-            if (alerts > 0) {
-                alert("Missing data, Please enter data in the highlighted fields before proceeding!");
-                return false;
-            }
-            return true;
-        }
-        
-        // used to build the device/stream list
-        function buildDeviceList() {
-            dataHub.getDeviceDetails().done(function (data) {
-                //console.log(data);
-                deviceData = data;
-                deviceData.sort(function (a, b) {
-                    if (a.Acronym > b.Acronym) return 1;
-                    if (a.Acronym < b.Acronym) return -1;
-
-                    return 0;
-                });
-                $.each(deviceData, function (key, dd) {
-                    if (parentDevice.indexOf(dd.ParentAcronym) == -1) {
-                        parentDevice.push(dd.ParentAcronym);
-                        $('#devicelistinner').append('<div class="panel-heading"><img id="img' + dd.ParentAcronym + '" src="Images/StatusLights/grey.png" /><button class="btn btn-link btn-sm" style="font-size: x-small;" data-toggle="collapse" data-parent="#devicelist" data-target="#dd' + dd.ParentAcronym + '">' + dd.ParentAcronym + '</button><button id="btn' + dd.ParentAcronym + '" class="btn btn-xs badge" style="font-size: xx-small;">Stats</button><div id="dd' + dd.ParentAcronym + '" class="panel-collapse collapse in"><div class="panel-body"><ul class="list-group" id="parent' + dd.ParentAcronym + '"></ul></div></div></div>');
-                        buildModal(dd.ParentAcronym);
-                        $('#btn' + dd.ParentAcronym).on("click", function () {
-                            $('#mod' + dd.ParentAcronym).modal('show');
-                        });
-
-                    }
-
-                    var acronym = dd.Acronym.replace(/!/g, "-").replace(dd.Acronym.split('!')[0] + '-', "");
-                    if (dd.Enabled == true) {
-                        $('#parent' + dd.ParentAcronym).append('<li class="list-group-item" ><img id="img' + acronym + '" src="Images/StatusLights/grey.png" /><button class="btn btn-link btn-sm" style="font-size: x-small;" title="' + dd.Name + '" data-toggle="collapse" data-target="#dd' + acronym + '">' + acronym + '</button><button id="btn' + acronym + '" class="btn btn-xs badge" style="font-size: xx-small;">Stats</button><div id="dd' + acronym + '" class="collapse"><table class="table" style="width:15%; font-size: x-small;" id="tb' + acronym + '"  ><th>ID</th><th>Stream</th><th>Signal</th></table></div></li>');
-                        buildModal(acronym);
-                        $('#btn' + acronym).on("click", function () {
-                            $('#mod' + acronym).modal('show');
-                        });
-                        $('#showSubscriptionStats').on("click", function () {
-                            $('#modSubscription').modal('show');
-                        });
-
-                    }
-                    parentDevice = dd.ParentAcronym;
-                });
-
             }).fail(function (error) {
                 showErrorMessage(error);
             });
 
+            dataHub.getMappingCompilerErrors().done(function (data) {
+                errorList = data;
+
+                if (errorList.length == 0) {
+                    if ($('#error-count').length)
+                        hideErrorMessage();
+
+                    $('#modal-errors').modal('hide');
+                } else if (errorList.length > 0) {
+                    var anchor = $('<a href="#" id="error-count">');
+
+                    if (data.length == 1)
+                        anchor.append('1 error');
+                    else
+                        anchor.append(data.length + ' errors');
+
+                    UpdateErrorModal();
+                    showErrorMessage(anchor.prop('outerHTML') + ' occurred during mapping compilation.');
+
+                    $('#error-count').click(function (e) {
+                        $('#modal-errors').modal('show');
+                        return false;
+                    });
+                }
+            }).fail(function (error) {
+                showErrorMessage(error);
+            });
+        }
+        
+        function UpdateTypeMappings() {
+            $('#modals').children().remove();
+
+            const vals = $('#types').val().split('~');
+
+            for (let i = 0; i < udts.length; ++i) {
+                if (vals[0] === udts[i].Category && vals[1] === udts[i].Identifier) {
+                    $('#fields').empty();
+
+                    $.each(udts[i].Fields, function (j, field) {
+                        if (field.Type.IsArray) {
+                            if (field.Type.UnderlyingType.IsUserDefined) {
+                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><div class="input-group"><input class="form-control" id="input'+field.Identifier+'"><div class="input-group-btn"><select id="select' + field.Identifier + '" class="form-control" multiple="multiple"></select></div></div></li>'));
+
+                                dataHub.getDefinedMappings().done(function (data) {
+                                    $.each(data, function (k, typeMapping) {
+                                        if (field.Type.UnderlyingType.Category === typeMapping.Type.Category && field.Type.UnderlyingType.Identifier === typeMapping.Type.Identifier)
+                                            $('#select' + field.Identifier).append($('<option />').val(typeMapping.Identifier).text(typeMapping.Identifier));
+                                    });
+
+                                    $('#select' + field.Identifier).multiselect({
+                                        buttonClass: 'btn btn-default',
+                                        delimiter: ';',
+                                        onChange: function (option, checked) {
+                                            if (checked) {
+                                                if ($('#input' + field.Identifier).val() !== "" && $('#input' + field.Identifier).val()[$('#input' + field.Identifier).val().length - 1] !== ';')
+                                                    $('#input' + field.Identifier).val( $('#input' + field.Identifier).val() +';'+ $(option).val() + ';');
+                                                else
+                                                    $('#input' + field.Identifier).val($('#input' + field.Identifier).val() + $(option).val() + ';');
+                                            }
+                                            else {
+                                                $('#input' + field.Identifier).val($('#input' + field.Identifier).val().replace($(option).val() + ';', ''));
+                                            }
+                                        }
+                                    });
+                                }).fail(function (error) {
+                                    showErrorMessage(error);
+                                });
+                            }
+                            else {
+                                buildModal(field.Identifier, true);
+                                $('#mod' + field.Identifier).one('show.bs.modal', function () { buildDeviceList(field.Identifier); });
+
+                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><div class="input-group"><input id="input' + field.Identifier + '" class="form-control" type="text" aria-describedby="addon' + field.Identifier + '"><span class="input-group-btn" id="addon' + field.Identifer + '"><button type="button" id="btn' + field.Identifier + '" class="btn btn-default btn-select-measurements" data-toggle="modal" data-target="#mod' + field.Identifier + '" disabled>Select</button></span></div></li>'));
+                                
+                                $('#save' + field.Identifier).on('click', function () {
+                                    var string = "";
+
+                                    $('#devicelistinner' + field.Identifier + ' input[type=checkbox]').each(function () {
+                                        if (this.checked)
+                                            string += $(this).val() + ';';
+                                        $(this).attr('checked', false);
+                                    });
+
+                                    $('#input' + field.Identifier).val(string);
+                                    $("#mod" + field.Identifier).modal('toggle');
+                                });
+                            }
+                        }
+                        else {
+                            if (field.Type.IsUserDefined) {
+                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><select id="input' + field.Identifier + '" class="form-control"></select></li>'));
+
+                                dataHub.getDefinedMappings().done(function (data) {
+                                    $.each(data, function (k, mapping) {
+                                        if (field.Type.Category === mapping.Type.Category && field.Type.Identifier === mapping.Type.Identifier)
+                                            $('#input' + field.Identifier).append($('<option />').val(mapping.Identifier).text(mapping.Identifier));
+                                    });
+                                }).fail(function (error) {
+                                    showErrorMessage(error);
+                                });
+
+                            }
+                            else {
+                                buildModal(field.Identifier, false);
+                                $('#mod' + field.Identifier).one('show.bs.modal', function ()
+                                {
+                                    buildDeviceList(field.Identifier);
+
+                                    $('#devicelistinner' + field.Identifier + ' input[type=checkbox]').each(function () {
+                                        $(this).change(function () {
+                                            $('#input' + field.Identifier).val($(this).val());
+                                            $("#mod" + field.Identifier).modal('toggle');
+                                            $(this).attr('checked', false);
+                                        });
+                                    });
+                                });
+
+                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><div class="input-group"><input id="input' + field.Identifier + '" class="form-control" type="text" aria-describedby="addon' + field.Identifier + '"><span class="input-group-btn" id="addon' + field.Identifer + '"><button type="button" id="btn' + field.Identifier + '" class="btn btn-default btn-select-measurements" data-toggle="modal" data-target="#mod' + field.Identifier + '" disabled>Select</button></span></div></li>'));
+                            }
+                        }
+                        //$('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><input id="input' + j + '" class="form-control" type="text"/></li>'));
+                    });
+                }
+            }
+
+            if (deviceData.length && measurementDetails.length)
+                $('.btn-select-measurements').prop('disabled', false);
         }
 
+        function RemoveMapping(data) {
+            dataHub.removeMapping(data).done(function () {
+                GetData();
+            }).fail(function (error) {
+                showErrorMessage(error);
+            });       
+        }
+        
+        function UpdateMapping(data) {
+            for (let i = 0; i < mappings.length; ++i) {
+                if (mappings[i].Identifier === data.Identifier)
+                    mappings.splice(i, 1);
+            }
+
+            $('#identifier').val(data.Identifier);
+            $('#types option').filter(function () {
+                return ($(this).text() === data.Type.Category + ' ' + data.Type.Identifier); //To select Blue
+            }).prop('selected', true);
+
+            UpdateTypeMappings();
+
+            $.each($('#fields input[type="text"]'), function (i, mapping) {
+                $(mapping).val(data.FieldMappings[i].Expression);
+            });         
+        }
+        
+        // Functions that validates that the input fields have text
+        function MappingValidation() {
+            var alerts = 0;
+
+            $.each($('input[type=text]'), function (i, field) {
+                if ($(field).val() === '') {
+                    $(field).css('border-color', 'red');
+                    ++alerts;
+                } else {
+                    $(field).css('border-color', '');
+                }
+            });
+
+            if (alerts > 0) {
+                alert("Missing data: please enter data in the highlighted fields before proceeding...");
+                return false;
+            }
+
+            return true;
+        }
+
+        function UpdateErrorModal() {
+            var content = $('<pre>');
+
+            $.each(errorList, function (key, error) {
+                content.append($('<a id="error-' + key + '" href="#">').text(error.Message));
+                content.append('\n');
+            });
+
+            $('#modal-errors').find('.modal-body').empty().append(
+                $('<div style="max-height: 250px; overflow-y: auto">').append(content),
+                $('<div id="input-label-errors">').text('No file being edited'),
+                $('<textarea id="input-errors" type="text" cols="80" rows="10">').attr('disabled', 'disabled')
+            );
+
+            $.each(errorList, function (key, error) {
+                $('#error-' + key).click(function (e) {
+                    var filePath = error.FilePath;
+
+                    if (filePath.length > 80)
+                        filePath = "..." + filePath.substr(filePath.length - 77, 77);
+
+                    $('#error-' + key).parent().children().css('text-decoration', '');
+                    $('#error-' + key).css('text-decoration', 'underline');
+                    $('#input-label-errors').text(filePath);
+                    $('#input-errors').removeAttr('disabled').val(error.FileContents);
+
+                    $('#save-errors').off('click.errors').on('click.errors', function (e) {
+                        var contents = $('#input-errors').val();
+
+                        $('#save-errors')
+                            .off('click.Errors')
+                            .attr('disabled', 'disabled');
+
+                        $('#input-label-errors').val('No file being edited');
+                        $('#input-errors').val('').attr('disabled', 'disabled');
+
+                        dataHub.fixMapping(error.FilePath, contents).done(function () {
+                            GetData();
+                        }).fail(function (error) {
+                            showErrorMessage(error);
+                        });
+                    }).removeAttr('disabled');
+
+                    return false;
+                });
+            });
+        }
+        
+        // used to build the device/stream list
+        function buildDeviceList(id) {
+            $('#devicelistinner' + id).children().remove();
+
+            parentDevice = [];
+
+            $.each(deviceData, function (key, device) {
+                if (parentDevice.indexOf(device.ParentAcronym) === -1) {
+                    parentDevice.push(device.ParentAcronym);
+                    $('#devicelistinner' + id).append('<div class="panel-heading"><button class="btn btn-link btn-sm" style="font-size: x-small;" data-toggle="collapse" data-parent="#devicelist'+id+'" data-target="#dd'+id + device.ParentAcronym + '">' + device.ParentAcronym + '</button><div id="dd' +id+ device.ParentAcronym + '" class="panel-collapse collapse in"><div class="panel-body"><ul class="list-group" id="parent'+id + device.ParentAcronym + '"></ul></div></div></div>');
+                }
+
+                const acronym = device.Acronym.replace(/!/g, "-").replace(device.Acronym.split('!')[0] + '-', "");
+
+                if (device.Enabled) {
+                    $('#parent'+id + device.ParentAcronym).append('<li class="list-group-item" ><button class="btn btn-link btn-sm" style="font-size: x-small;" title="' + device.Name + '" data-toggle="collapse" data-target="#dd' +id+ acronym + '">' + acronym + '</button><div id="dd' +id+ acronym + '" class="collapse"><table class="table" style="width:15%; font-size: x-small;" id="tb' +id+ acronym + '"  ><th>ID</th><th>Stream</th><th>Signal</th><th>Description</th></table></div></li>');
+                }
+            });
+            
+            $.each(measurementDetails, function (key, measurement) {
+                var acronym = null;
+
+                if (measurement.DeviceAcronym != null)
+                    acronym = measurement.DeviceAcronym.replace(/!/g, "-").replace(measurement.DeviceAcronym.split('!')[0] + '-', "");
+
+                if (measurement.ID.indexOf("STAT") < 0 && measurement.SignalAcronym !== "DIGI" && measurement.SignalAcronym !== "FLAG" && measurement.SignalAcronym !== "QUAL" && measurement.SignalAcronym !== "STAT" && measurement.SignalAcronym !== "ALOG") {
+                    let sigref = measurement.SignalReference.replace(/!/g, "-");
+                    sigref = sigref.replace(measurement.DeviceAcronym.replace(/!/g, "-") + "-", "");
+                    $('#tb' + id+ acronym).append('<tr title="' + measurement.Description + '"><td nowrap><label class="checkbox-inline"><input type="checkbox" id="cb'+id + measurement.ID + '" value="' + measurement.ID +'">' + measurement.ID.split(':')[1] + '</td><td>' + sigref + '</td><td>' + measurement.SignalAcronym + '</td><td>'+measurement.Description+'</td></tr>');
+                }
+            });
+        }
+        
+        // used to build statistic modals
+        function buildModal(acronym, bool) {
+            $("#modals").append('<div id="' + acronym + '"></div>');
+
+            let html = '<div id="mod' + acronym + '" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="confirm-modal" aria-hidden="true">';
+            html += '<div class="modal-vertical-align-container">'
+            html += '<div class="modal-dialog modal-vertical-align-center">';
+            html += '<div class="modal-content">';
+            html += '<div class="modal-header">';
+            html += '<a class="close" data-dismiss="modal">×</a>';
+            html += '<h4>' + acronym + ' Selection</h4>';
+            html += '</div>';
+            html += '<div class="modal-body" style="height: 300px; overflow-y: auto" >';
+            html += '<div id="devicelist' + acronym + '" class="panel-group"> ';
+            html += '<div id="devicelistinner' + acronym + '" class="panel panel-default"></div>';
+            html += '</div>';
+            html += '</div>';
+            html += '<div class="modal-footer">';
+
+            if (bool)
+                html += '<span class="btn" id="save' + acronym + '">Save</span>'; // Save button
+
+            html += '<span class="btn" data-dismiss="modal">Close</span>'; // close button
+            html += '</div>';  // footer
+            html += '</div>';  // modalWindow
+            html += '</div>';
+
+            $('#' + acronym).html(html);
+            $("#mod" + acronym).modal({ 'show': false });
+        }
     </script>
 }

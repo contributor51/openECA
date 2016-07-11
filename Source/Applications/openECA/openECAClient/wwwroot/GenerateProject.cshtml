@@ -22,6 +22,7 @@
 //*****************************************************************************************************@
 @using openECAClient
 @using openECAClient.Model
+@using GSF.Web
 @using RazorEngine.Templating
 @inherits TemplateBase<AppModel>
 @{
@@ -31,68 +32,72 @@
 @section StyleSheets {
     @Raw(ViewBag.PageStyleSheets.ToString())
 }
-<div class="row">
-    <div class="col-md-4">
-        <label for="identifier">Project Name:</label>
-        <input class="form-control" type="text" id="identifier">
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-4">
-        <label for="directory">File Directory:</label>
-        <div class="input-group">
-            <input class="form-control" type="text" id="directory" value="@Raw(Model.Global.DefaultProjectPath)" />
-            <span class="input-group-btn">
-                <button type="button" class="btn btn-default" data-toggle="modal" data-target="#directoryBrowser"  hub-dependent><span class="glyphicon glyphicon-option-horizontal"></span></button>
-            </span>
+<div class="col-md-6 col-md-offset-3">
+    <div class="row" style="margin-top: 20px">
+        <div class="col-md-12">
+            <label for="identifier">Project Name:</label>
+            <input class="form-control" type="text" id="identifier">
         </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-4">
-        <label for="inputs">Input Mapping:</label>
-        <select class="form-control" id="inputs"></select>
+    <div class="row" style="margin-top: 10px">
+        <div class="col-md-12">
+            <label for="directory">File Directory:</label>
+            <div class="input-group">
+                <input class="form-control" type="text" id="directory" value="@Raw(Model.Global.DefaultProjectPath)" />
+                <span class="input-group-btn">
+                    <button type="button" class="btn btn-default" data-toggle="modal" data-target="#directoryBrowser" hub-dependent><span class="glyphicon glyphicon-option-horizontal"></span></button>
+                </span>
+            </div>
+        </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-4">
-        <label for="outputs">Output Mapping:</label>
-        <select class="form-control" id="outputs"></select>
+    <div class="row" style="margin-top: 10px">
+        <div class="col-md-12">
+            <label for="inputs">Input Mapping:</label>
+            <select class="form-control" id="inputs"></select>
+        </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-4">
-        <label for="targetLanguage">Target Language:</label>
-        <select class="form-control" id="targetLanguage">
-            <option value="C#">C# (.NET)</option>
-            <option value="F#" disabled="disabled">F# (.NET)</option>
-            <option value="VB" disabled="disabled">VB (.NET)</option>
-            <option value="Java" disabled="disabled">Java</option>
-            <option value="C++" disabled="disabled">C++</option>
-            <option value="Python" disabled="disabled">Python</option>
-            <option value="MATLAB" disabled="disabled">MATLAB</option>
-        </select>
+    <div class="row" style="margin-top: 10px">
+        <div class="col-md-12">
+            <label for="outputs">Output Mapping:</label>
+            <select class="form-control" id="outputs"></select>
+        </div>
     </div>
-</div>
 
-<br/>
-<br/>
+    <div class="row" style="margin-top: 10px">
+        <div class="col-md-12">
+            <label for="targetLanguage">Target Language:</label>
+            <select class="form-control" id="targetLanguage">
+                <option value="C#">C# (.NET)</option>
+                <option value="F#">F# (.NET)</option>
+                <option value="VB">Visual Basic (.NET)</option>
+                <option value="IronPython">IronPython (.NET)</option>
+                <option value="Java" disabled="disabled">Java</option>
+                <option value="C++" disabled="disabled">C++</option>
+                <option value="Python" disabled="disabled">Python</option>
+                <option value="MATLAB" disabled="disabled">MATLAB</option>
+            </select>
+        </div>
+    </div>
 
-<div class="row">
-    <div class="col-md-12">
-        <input class="btn btn-primary" type="button" id="generate" value="Generate Project" hub-dependent/>
+    <br />
+    <br />
+
+    <div class="row">
+        <div class="col-md-12">
+            <input class="btn btn-primary" type="button" id="generate" value="Generate Project" hub-dependent />
+        </div>
     </div>
 </div>
 @Include("DirectoryBrowser.cshtml")
 @section Scripts {
+    <script src="Scripts/knockout-3.4.0.js"></script>
     @Raw(ViewBag.PageControlScripts.ToString())
     <script>
         $("#selectFolder").click(function () {
-            $("#directory").val(viewModel.currentFolder());
+            $("#directory").val(directoryViewModel.currentFolder());
         });
 
         var re = /^[A-Za-z_][\w]*$/;
@@ -100,7 +105,7 @@
         var rewinpath = /^(?:[\w]\:|\\)(\\[\w\-\s\.]+)+$/;
 
         $(function () {
-            $('#generate').attr('disabled', 'disabled');
+            $("#generate").attr('disabled', 'disabled');
 
             $('#identifier').on('keyup', function (e) {
                 if (re.test($('#identifier').val())) {
@@ -112,6 +117,8 @@
                     $('#identifier').css('border-color', 'red');
                     $('#generate').attr('disabled', 'disabled');
                 }
+
+                $("#directory").val("@Raw(Model.Global.DefaultProjectPath.JavaScriptEncode())" + $("#identifier").val());
             });
 
             $('#directory').on('keyup', function (e) {

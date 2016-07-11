@@ -30,6 +30,7 @@ using System.Threading;
 using System.Windows.Forms;
 using GSF;
 using GSF.Configuration;
+using GSF.IO;
 using GSF.Reflection;
 using GSF.Web.Hosting;
 using GSF.Web.Model;
@@ -118,9 +119,21 @@ namespace openECAClient
             }
         }
 
+        private void MessagesTextBox_SizeChanged(object sender, EventArgs e)
+        {
+            // Sometimes the scrollbar will fail to update or scroll
+            // beyond the bottom of the text box when the text box
+            // is resized. Scrolling to the top and then back to the
+            // bottom fixes this problem
+            MessagesTextBox.Select(0, 0);
+            MessagesTextBox.ScrollToCaret();
+            MessagesTextBox.Select(MessagesTextBox.TextLength, 0);
+            MessagesTextBox.ScrollToCaret();
+        }
+
         private void MainWindow_FormClosing(object sender, FormClosingEventArgs e)
         {
-            if (MessageBox.Show(this, $"Are you sure you want to stop the {Text}?", $"Shutdown {Text}...", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+            if (MessageBox.Show(this, $"Stopping application will terminate openECA Data Modeling Manager web functionality. Are you sure you want to stop the {Text}?", $"Shutdown {Text}...", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
                 e.Cancel = true;
         }
 
@@ -228,7 +241,9 @@ namespace openECAClient
                 .Take(MessagesTextBox.Lines.Length - m_maxLines)
                 .Aggregate(0, (length, line) => length + line.Length + "\n".Length);
 
+            MessagesTextBox.ReadOnly = false;
             MessagesTextBox.SelectedText = "";
+            MessagesTextBox.ReadOnly = true;
 
             // Scroll to bottom
             MessagesTextBox.SelectionStart = MessagesTextBox.TextLength;
@@ -262,7 +277,9 @@ namespace openECAClient
                 .Take(MessagesTextBox.Lines.Length - m_maxLines)
                 .Aggregate(0, (length, line) => length + line.Length + "\n".Length);
 
+            MessagesTextBox.ReadOnly = false;
             MessagesTextBox.SelectedText = "";
+            MessagesTextBox.ReadOnly = true;
 
             // Scroll to bottom
             MessagesTextBox.SelectionStart = MessagesTextBox.TextLength;
@@ -282,13 +299,13 @@ namespace openECAClient
         {
             CategorizedSettingsElementCollection systemSettings = ConfigurationFile.Current.Settings["systemSettings"];
 
-            systemSettings.Add("WebHostURL", "http://localhost:8080", "The web hosting URL for remote system management.");
+            systemSettings.Add("WebHostURL", "http://localhost:8080", "The web hosting URL for user interface operation. For increased security, only bind to localhost.");
             systemSettings.Add("DefaultWebPage", "Index.cshtml", "Determines if cache control is enabled for browser clients.");
             systemSettings.Add("CompanyName", "Grid Protection Alliance", "The name of the company who owns this instance of the openMIC.");
             systemSettings.Add("CompanyAcronym", "GPA", "The acronym representing the company who owns this instance of the openMIC.");
             systemSettings.Add("DateFormat", "MM/dd/yyyy", "The default date format to use when rendering timestamps.");
             systemSettings.Add("TimeFormat", "HH:mm.ss.fff", "The default time format to use when rendering timestamps.");
-            systemSettings.Add("BootstrapTheme", "Content/bootstrap.min.css", "Path to Bootstrap CSS to use for rendering styles.");
+            systemSettings.Add("BootstrapTheme", "Content/bootstrap.min.css", "Path to Bootstrap CSS to use for rendering styles.", false, SettingScope.User);
             systemSettings.Add("SubscriptionConnectionString", "server=localhost:6190; interface=0.0.0.0", "Connection string for data subscriptions to openECA server.", false, SettingScope.User);
             systemSettings.Add("DefaultProjectPath", "openECA Projects", "Default path on which to store the user's projects.", false, SettingScope.User);
 
@@ -297,7 +314,7 @@ namespace openECAClient
             Model.Global.DefaultWebPage = systemSettings["DefaultWebPage"].Value;
             Model.Global.CompanyName = systemSettings["CompanyName"].Value;
             Model.Global.CompanyAcronym = systemSettings["CompanyAcronym"].Value;
-            Model.Global.ApplicationName = "openECA Data Modeling Tool";
+            Model.Global.ApplicationName = "openECA Data Modeling Manager";
             Model.Global.ApplicationDescription = "open Extensible Control & Analytics Client";
             Model.Global.ApplicationKeywords = "open source, utility, software, analytics";
             Model.Global.DateFormat = systemSettings["DateFormat"].Value;
@@ -305,7 +322,7 @@ namespace openECAClient
             Model.Global.DateTimeFormat = $"{Model.Global.DateFormat} {Model.Global.TimeFormat}";
             Model.Global.BootstrapTheme = systemSettings["BootstrapTheme"].Value;
             Model.Global.SubscriptionConnectionString = systemSettings["SubscriptionConnectionString"].Value;
-            Model.Global.DefaultProjectPath = systemSettings["DefaultProjectPath"].Value;
+            Model.Global.DefaultProjectPath = FilePath.AddPathSuffix(systemSettings["DefaultProjectPath"].Value);
         }
 
         #endregion

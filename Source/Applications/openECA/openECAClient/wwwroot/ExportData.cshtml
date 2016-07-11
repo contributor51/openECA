@@ -1,0 +1,247 @@
+﻿@*******************************************************************************************************
+//  ExportData.cshtml - Gbtc
+//
+//  Copyright © 2016, Grid Protection Alliance.  All Rights Reserved.
+//
+//  Licensed to the Grid Protection Alliance (GPA) under one or more contributor license agreements. See
+//  the NOTICE file distributed with this work for additional information regarding copyright ownership.
+//  The GPA licenses this file to you under the MIT License (MIT), the "License"; you may not use this
+//  file except in compliance with the License. You may obtain a copy of the License at:
+//
+//      http://opensource.org/licenses/MIT
+//
+//  Unless agreed to in writing, the subject software distributed under the License is distributed on an
+//  "AS-IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. Refer to the
+//  License for the specific language governing permissions and limitations.
+//
+//  Code Modification History:
+//  ----------------------------------------------------------------------------------------------------
+//  01/15/2016 - J. Ritchie Carroll
+//       Generated original version of source code.
+//
+//*****************************************************************************************************@
+@using openECAClient
+@using openECAClient.Model
+@using RazorEngine.Templating
+@inherits TemplateBase<AppModel>
+@{
+    Layout = "Layout.cshtml";
+    ViewBag.Title = "Export Data";
+
+}
+@section StyleSheets{
+    @Raw(ViewBag.PageStyleSheets.ToString())
+}
+<div class="col-md-6 col-md-offset-3">
+
+    <div class="row" style="margin-top: 20px">
+        <div class="col-md-12">
+            <label for="datatype">Data Type:</label>
+            <select class="form-control" id="datatype">
+                <option value="Structures">Structures</option>
+                <option value="Mappings">Mappings</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row" style="margin-top: 10px">
+        <div class="col-md-12">
+            <label for="directory">File Directory:</label>
+            <div class="input-group">
+                <input class="form-control" type="text" id="directory" value="@Raw(Model.Global.DefaultProjectPath)" />
+                <span class="input-group-btn">
+                    <button type="button" class="btn btn-default" data-toggle="modal" data-target="#directoryBrowser" hub-dependent><span class="glyphicon glyphicon-option-horizontal"></span></button>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row" style="margin-top: 20px">
+        <div class="col-md-12">
+            <label for="filename">File Name:</label>
+            <input class="form-control" type="text" id="filename">
+        </div>
+    </div>
+    <div class="row" style="margin-top: 20px">
+        <div class="col-md-12">
+            <button class="form-control btn btn-primary" onclick="exportData()" id="export">Export</button>
+        </div>
+    </div>
+
+    <hr/>
+    <br/>
+        
+    <div class="row">
+        <div class="col-md-12">
+            <label for="table"></label>
+            <table class="table" id="table">
+                <thead></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+@Include("DirectoryBrowser.cshtml")
+@section Scripts {
+    <script src="Scripts/knockout-3.4.0.js"></script>
+    @Raw(ViewBag.PageControlScripts.ToString())
+    <script>
+        $("#selectFolder").click(function () {
+            $("#directory").val(directoryViewModel.currentFolder());
+        });
+
+                var fieldsToAdd = [];
+                var udts = [];
+                var mappings = [];
+                var affectedUDTs = [];
+                var updateArray = [];
+                var re = /^[A-Za-z_][A-Za-z_0-9]*$/;
+
+                $(function () {
+
+
+                    $(window).on("hubConnected", function (event) {
+                        GetData();
+                    });
+
+                    $('#datatype').on('change', function (e) {
+                        $('#table thead').children().remove();
+                        $('#table tbody').children().remove();
+
+                        if ($('#datatype').val() == 'Structures') {
+                            $('label[for="table"]').text("User Defined Types:");
+
+                            $('#table thead').append('<tr><th></th><th>Category</th><th>Identifier</th><th>Fields</th></tr>');
+                            BuildDefinedTypes();
+                        }
+                        else if ($('#datatype').val() == 'Mappings') {
+                            $('label[for="table"]').text("User Defined Mappings:");
+
+                            $('#table thead').append('<tr><th></th><th>Type</th><th>Identifier</th><th>Mappings</th></tr>');
+                            BuildDefinedMappings();
+                        }
+
+                    });
+
+                });
+
+                // Function that will get and show data
+                function GetData() {
+                    $('#table thead').children().remove();
+                    $('#table tbody').children().remove();
+                    
+                    udts = [];
+                    mappings = [];
+
+                    dataHub.getDefinedTypes().done(function (data) {
+                        $.each(data, function (i, d) {
+                            udts.push(d);
+                        });
+                        $(window).trigger('haveUDTS');
+                    });
+                    
+                    dataHub.getDefinedMappings().done(function (data) {
+                        $.each(data, function (i, d) {
+                            mappings.push(d);
+                            $(window).trigger('haveMappings');
+
+                        });
+
+                    });
+
+
+                    if ($('#datatype').val() == 'Structures') {
+                        $('label[for="table"]').text("User Defined Types:");
+                        $('#table thead').append('<tr><th></th><th>Category</th><th>Identifier</th><th>Fields</th></tr>');
+                        $(window).on('haveUDTS', function () {
+                            BuildDefinedTypes();
+                        });
+
+                    }
+                    else if ($('#datatype').val() == 'Mappings') {
+                        $('label[for="table"]').text("User Defined Mappings:");
+                        $('#table thead').append('<tr><th></th><th>Type</th><th>Identifier</th><th>Mappings</th></tr>');
+                        $(window).on('haveMappings', function () {
+                            BuildDefinedMappings();
+                        });
+
+                    }
+
+                    
+
+
+                }
+        
+                function BuildDefinedTypes() {
+                    $.each(udts, function (i, d) {
+                        if (d.IsUserDefined) {
+
+                            var fieldsString = "";
+                            for (var j = 0; j < d.Fields.length; ++j) {
+                                fieldsString += d.Fields[j].Type["Category"] + ' ' + d.Fields[j].Type["Identifier"] + ' ' + d.Fields[j].Identifier;
+                                if (j < d.Fields.length - 1)
+                                    fieldsString += ', ';
+                            }
+
+                            $('#table tbody').append($('<tr><td><input type="checkbox" id="cb'+ i +'" value="'+i+'"></td><td>' + d.Category + '</td><td>' + d.Identifier + '</td><td>' + fieldsString + '</td></tr>'));
+                        }
+                    });
+                }
+        
+                function BuildDefinedMappings() {
+                    $.each(mappings, function (i, d) {
+                        var fieldsString = '';
+                        mappings.push(d);
+                        $.each(d.FieldMappings, function (i, fms) {
+                            fieldsString += fms.Field.Identifier + ' to ' + fms.Expression;
+                            if (i < d.FieldMappings.length - 1)
+                                fieldsString += ', ';
+                        });
+
+                        $('#table tbody').append($('<tr><td><input type="checkbox" id="cb' + i + '" value="' + i + '"></td><td style="width=15%;">' + d.Type.Category + ' ' + d.Type.Identifier + '</td><td>' + d.Identifier + '</td><td>' + fieldsString + '</td></tr>'));
+                    });
+
+                }
+        
+                function exportData() {
+                    var array = [];
+                    var string = $('#directory').val() + '\\' + $('#filename').val() + '.txt';
+                    if ($('#datatype').val() == 'Structures') {
+                        $.each($('input[type="checkbox"]'), function (i, cb) {
+                            if (this.checked) {
+                                array.push(udts[$(cb).val()]);
+                            }
+                            
+                        });
+                        dataHub.exportUDTs(array, string).done(function () {
+                            alert("Exported UDTs to " + string + "!");
+                            location.reload();
+                        });
+
+
+                    }
+                    else if ($('#datatype').val() == 'Mappings') {
+                        $.each($('input[type="checkbox"]'), function (i, cb) {
+                            if (this.checked) {
+                                array.push(mappings[$(cb).val()]);
+                            }
+
+                        });
+                        
+                        dataHub.exportMappings(array, string).done(function () {
+                            alert("Exported Mappings to " + string + "!");
+                            location.reload();
+
+                        });
+
+                    }
+                    
+                    //console.log(array);
+                }
+        
+
+
+            
+    </script>
+}

@@ -1,0 +1,27 @@
+﻿using ECAClientFramework;
+{Usings}
+
+namespace {ProjectName}
+{
+    static class Algorithm
+    {
+        public static void UpdateSystemSettings()
+        {
+            SystemSettings.ConnectionString = @{ConnectionString};
+            SystemSettings.FramesPerSecond = 30;
+            SystemSettings.LagTime = 3;
+            SystemSettings.LeadTime = 1;
+        }
+
+        public static {OutputType} Execute({InputType} input)
+        {
+            {OutputType} output = new {OutputType}();
+
+            // Implement your algorithm here
+            // You can also write messages to the main window:
+            MainWindow.WriteMessage("Hello, World!");
+
+            return output;
+        }
+    }
+}
