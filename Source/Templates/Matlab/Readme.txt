@@ -1,0 +1,1 @@
+Run the "Program.m" MATLAB script to start the openECA test harness project.
