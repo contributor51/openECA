@@ -141,8 +141,6 @@ namespace ECAClientFramework
                 blockMeasurement.Multiplier = measurement.Multiplier;
                 blockMeasurement.PublishedTimestamp = measurement.PublishedTimestamp;
                 blockMeasurement.ReceivedTimestamp = measurement.ReceivedTimestamp;
-                blockMeasurement.TagName = measurement.TagName;
-                blockMeasurement.MeasurementValueFilter = measurement.MeasurementValueFilter;
 
                 return true;
             }
@@ -274,23 +272,60 @@ namespace ECAClientFramework
         }
 
         /// <summary>
-        /// Returns the measurement at the given timestamp or
-        /// null if no such measurement exists in the buffer.
+        /// Returns the measurement at the given timestamp or the measurement
+        /// with the closest timestamp if no such measurement exists in the buffer.
         /// </summary>
         /// <param name="timestamp">The timestamp of the measurement to be retrieved.</param>
-        /// <returns>The measurement at the given timestamp or null if no measurement exists.</returns>
-        public IMeasurement GetMeasurement(Ticks timestamp)
+        /// <returns>The measurement with the timestamp closest to the given timestamp.</returns>
+        public IMeasurement GetNearestMeasurement(Ticks timestamp)
+        {
+            Range<IMeasurement> nearestMeasurements = GetNearestMeasurements(timestamp);
+
+            return new IMeasurement[] { nearestMeasurements.Start, nearestMeasurements.End }
+                .Where(measurement => (object)measurement != null)
+                .MinBy(measurement => Math.Abs(measurement.Timestamp - timestamp));
+        }
+
+        /// <summary>
+        /// Returns a range encapsulating the nearest measurements around a given timestamp.
+        /// If no measurement exists in a given direction on the timeline, a null measurment
+        /// is returned instead.
+        /// </summary>
+        /// <param name="timestamp">The timestamp of the measurements to be retrieved.</param>
+        /// <returns>A range enapsulating the nearest measurements around the given timestamp.</returns>
+        public Range<IMeasurement> GetNearestMeasurements(Ticks timestamp)
         {
             Recycle();
 
             int blockIndex = GetBlockIndex(timestamp);
             int measurementIndex = m_blocks[blockIndex].GetMeasurementIndex(timestamp);
-            IMeasurement measurement = m_blocks[blockIndex][measurementIndex];
+            IMeasurement leftMeasurement = m_blocks[blockIndex][measurementIndex];
+            IMeasurement rightMeasurement = leftMeasurement;
 
-            if (measurement.Timestamp != timestamp)
-                return null;
+            if (timestamp < leftMeasurement.Timestamp)
+            {
+                int absoluteIndex = ToAbsoluteIndex(blockIndex, measurementIndex);
+                blockIndex = ToBlockIndex(absoluteIndex - 1);
+                measurementIndex = ToMeasurementIndex(absoluteIndex - 1);
 
-            return measurement;
+                if (blockIndex >= 0)
+                    leftMeasurement = m_blocks[blockIndex][measurementIndex];
+                else
+                    leftMeasurement = null;
+            }
+            else if (rightMeasurement.Timestamp < timestamp)
+            {
+                int absoluteIndex = ToAbsoluteIndex(blockIndex, measurementIndex);
+                blockIndex = ToBlockIndex(absoluteIndex + 1);
+                measurementIndex = ToMeasurementIndex(absoluteIndex + 1);
+
+                if (blockIndex <= m_endBlock && measurementIndex < m_blocks[blockIndex].Count)
+                    rightMeasurement = m_blocks[blockIndex][measurementIndex];
+                else
+                    rightMeasurement = null;
+            }
+
+            return new Range<IMeasurement>(leftMeasurement, rightMeasurement);
         }
 
         /// <summary>
