@@ -55,10 +55,15 @@ namespace ECAClientUtilities
         /// <summary>
         /// Creates a new <see cref="MappingHelper"/>.
         /// </summary>
-        /// <param name="signalLookup">Signal lookup instance.</param>
-        public MappingHelper(SignalLookup signalLookup) : base(signalLookup, null)
+        /// <param name="framework">Container object for framework elements.</param>
+        public MappingHelper(Framework framework)
+            : base(framework, null)
         {
         }
+
+        #endregion
+
+        #region [ Properties ]
 
         /// <summary>
         /// Gets or sets mapping function delegate for helper class.

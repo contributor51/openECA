@@ -15,16 +15,10 @@ namespace {ProjectName}.Model
     [CompilerGenerated]
     public class Mapper : MapperBase
     {
-        #region [ Members ]
-
-        // Fields
-        private int m_index;
-
-        #endregion
-
         #region [ Constructors ]
 
-        public Mapper(SignalLookup lookup) : base(lookup, "{InputMapping}")
+        public Mapper(Framework framework)
+            : base(framework, "{InputMapping}")
         {
         }
 
@@ -34,13 +28,14 @@ namespace {ProjectName}.Model
 
         public override void Map(IDictionary<MeasurementKey, IMeasurement> measurements)
         {
-            m_index = 0;
             SignalLookup.UpdateMeasurementLookup(measurements);
             TypeMapping inputMapping = MappingCompiler.GetTypeMapping(InputMapping);
 
-            {InputTypeName} input = Create{InputCategoryIdentifier}{InputTypeIdentifier}(inputMapping);
+            {InputDataTypeName} inputData = Create{InputCategoryIdentifier}{InputDataTypeIdentifier}(inputMapping);
+            KeyIndex = 0;
+            {InputMetaTypeName} inputMeta = Create{InputCategoryIdentifier}{InputMetaTypeIdentifier}(inputMapping);
 
-            {OutputTypeName} output = Algorithm.Execute(input);
+            {OutputDataTypeName} outputData = Algorithm.Execute(inputData, inputMeta);
 
             // TODO: Later versions will publish output to the openECA server
         }

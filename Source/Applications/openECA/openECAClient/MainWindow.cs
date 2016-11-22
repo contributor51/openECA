@@ -22,18 +22,22 @@
 //******************************************************************************************************
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
+using ECACommonUtilities;
+using ECACommonUtilities.Model;
 using GSF;
 using GSF.Configuration;
 using GSF.IO;
 using GSF.Reflection;
 using GSF.Web.Hosting;
 using GSF.Web.Model;
+using Microsoft.AspNet.SignalR.Hubs;
 using Microsoft.Owin.Hosting;
 using openECAClient.Model;
 
@@ -323,7 +327,87 @@ namespace openECAClient
             Model.Global.BootstrapTheme = systemSettings["BootstrapTheme"].Value;
             Model.Global.SubscriptionConnectionString = systemSettings["SubscriptionConnectionString"].Value;
             Model.Global.DefaultProjectPath = FilePath.AddPathSuffix(systemSettings["DefaultProjectPath"].Value);
+
         }
+
+        public static void CheckPhasorTypesAndMappings()
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string ecaClientDataPath = Path.Combine(appData, "Grid Protection Alliance", "openECAClient");
+            string udtDirectory = Path.Combine(ecaClientDataPath, "UserDefinedTypes");
+            string udmDirectory = Path.Combine(ecaClientDataPath, "UserDefinedMappings");
+
+            UDTCompiler udtCompiler = new UDTCompiler();
+
+            if (Directory.Exists(udtDirectory))
+                udtCompiler.Scan(udtDirectory);
+
+            if (!udtCompiler.DefinedTypes.Where(x => x.IsUserDefined).ToList().Any(x => x.Category == "ECA" && x.Identifier == "Phasor"))
+            {
+                UserDefinedType udt = new UserDefinedType();
+                udt.Identifier = "Phasor";
+                udt.Category = "ECA";
+                udt.Fields = new List<UDTField>();
+                UDTField magnitude = new UDTField();
+                magnitude.Type = new DataType() { Category = "FloatingPoint", Identifier = "Double" };
+                magnitude.Identifier = "Magnitude";
+                udt.Fields.Add(magnitude);
+                UDTField angle = new UDTField();
+                angle.Type = new DataType() { Category = "FloatingPoint", Identifier = "Double" };
+                angle.Identifier = "Angle";
+                udt.Fields.Add(angle);
+                UDTWriter udtWriter = new UDTWriter();
+
+                udtWriter.Types.Add(udt);
+
+                udtWriter.WriteFiles(udtDirectory);
+            }
+
+            udtCompiler = new UDTCompiler();
+
+            if (Directory.Exists(udtDirectory))
+                udtCompiler.Scan(udtDirectory);
+
+            MappingCompiler mappingCompiler = new MappingCompiler(udtCompiler);
+
+            if(Directory.Exists(udmDirectory))
+                mappingCompiler.Scan(udmDirectory);
+
+            DataHub dataHub = new DataHub();
+
+            dataHub.Context = new HubCallerContext(null, Guid.NewGuid().ToString());
+
+            dataHub.RegisterMetadataRecieved(() =>
+            {
+                IEnumerable<PhasorDetail> phasorDetails = dataHub.GetPhasorDetails();
+                List<MeasurementDetail> measurementDetails = dataHub.GetMeasurementDetails().ToList();
+                MappingWriter mappingWriter = new MappingWriter();
+
+                foreach (PhasorDetail pd in phasorDetails)
+                {
+                    string identifier = (pd.DeviceAcronym + '_' +
+                                         pd.Label + '_' +
+                                         pd.Phase.Replace(" ", "_").Replace("+", "pos").Replace("-", "neg") + '_' +
+                                         pd.Type)
+                                         .Replace(" ", "_").Replace("\\", "_").Replace("/", "_").Replace("!", "_").Replace("-", "_").Replace("#", "").Replace("'", "").Replace("(","").Replace(")","");
+
+                    if (!mappingCompiler.DefinedMappings.Any(x => x.Identifier == identifier))
+                    {
+                        TypeMapping tm = new TypeMapping();
+                        tm.Identifier = identifier;
+                        tm.Type = (UserDefinedType)udtCompiler.DefinedTypes.Find(x => x.Category == "ECA" && x.Identifier == "Phasor");
+                        tm.FieldMappings.Add(new FieldMapping() { Field = tm.Type.Fields[0], Expression = measurementDetails.Find(x => x.DeviceAcronym == pd.DeviceAcronym && x.PhasorSourceIndex == pd.SourceIndex && x.SignalAcronym.Contains("PHM")).SignalID.ToString() });
+                        tm.FieldMappings.Add(new FieldMapping() { Field = tm.Type.Fields[1], Expression = measurementDetails.Find(x => x.DeviceAcronym == pd.DeviceAcronym && x.PhasorSourceIndex == pd.SourceIndex && x.SignalAcronym.Contains("PHA")).SignalID.ToString() });
+                        mappingWriter.Mappings.Add(tm);
+                    }
+                }
+
+                mappingWriter.WriteFiles(udmDirectory);
+            });
+
+            dataHub.InitializeSubscriptions();
+        }
+
 
         #endregion
     }

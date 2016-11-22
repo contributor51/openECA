@@ -171,7 +171,7 @@ namespace ECAClientFramework
                 else
                     m_startOffset = TimeSpan.FromTicks((long)Math.Round(windowSize * sampleUnit.Ticks / sampleRate));
 
-                m_windowSize = (int)Math.Round(m_startOffset.Ticks * windowSize / windowUnit.Ticks);
+                m_windowSize = (int)Math.Round(m_startOffset.Ticks * sampleRate / sampleUnit.Ticks);
             }
 
             #endregion
@@ -346,15 +346,28 @@ namespace ECAClientFramework
         /// <param name="key">The key that identifies the signal to be queried.</param>
         /// <param name="frameTime">The time of the frame relative to which the sample window is defined.</param>
         /// <param name="window">The sample window that defines the range of time to be queried from the buffer.</param>
-        /// <returns>The full collectin of measurements for the given signal in the given sample window relative to the given frame time.</returns>
+        /// <returns>The full collection of measurements for the given signal in the given sample window relative to the given frame time.</returns>
         public List<IMeasurement> GetMeasurements(MeasurementKey key, Ticks frameTime, SampleWindow window)
+        {
+            return GetMeasurements(key, frameTime, window, m_resamplingStrategy);
+        }
+
+        /// <summary>
+        /// Queries a signal buffer for the full collection of measurements over the given sample window.
+        /// </summary>
+        /// <param name="key">The key that identifies the signal to be queried.</param>
+        /// <param name="frameTime">The time of the frame relative to which the sample window is defined.</param>
+        /// <param name="window">The sample window that defines the range of time to be queried from the buffer.</param>
+        /// <param name="resamplingStrategy">The strategy to use for alignment of data to the sample rate of the window.</param>
+        /// <returns>The full collection of measurements for the given signal in the given sample window relative to the given frame time.</returns>
+        public List<IMeasurement> GetMeasurements(MeasurementKey key, Ticks frameTime, SampleWindow window, ResamplingStrategy resamplingStrategy)
         {
             SignalBuffer signalBuffer;
 
             if (!m_signalBuffers.TryGetValue(key, out signalBuffer))
                 return null;
 
-            switch (m_resamplingStrategy)
+            switch (resamplingStrategy)
             {
                 default:
                 case ResamplingStrategy.NearestMeasurement:
@@ -366,6 +379,62 @@ namespace ECAClientFramework
                 case ResamplingStrategy.None:
                     return window.AlignNone(signalBuffer, frameTime);
             }
+        }
+
+        /// <summary>
+        /// Queries multiple signal buffers for data in the given sample window and returns first frame.
+        /// This method should typically be used in conjunction with sample windows without a window size,
+        /// created using the <see cref="CreateSampleWindow(decimal, TimeSpan, decimal, TimeSpan)"/> method.
+        /// </summary>
+        /// <param name="keys">The keys that identify the signals to be queried.</param>
+        /// <param name="frameTime">The time of the frame relative to which the sample window is defined.</param>
+        /// <param name="window">The sample window that defines the range of time to be queried from the buffer.</param>
+        /// <returns>The first frame for the given signal in the given sample window relative to the given frame time.</returns>
+        public IDictionary<MeasurementKey, IMeasurement> GetFrame(MeasurementKey[] keys, Ticks frameTime, SampleWindow window)
+        {
+            return GetFrames(keys, frameTime, window).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Queries multiple signal buffers to build a list of frames of data over the given sample window.
+        /// </summary>
+        /// <param name="keys">The keys that identify the signals to be queried.</param>
+        /// <param name="frameTime">The time of the frame relative to which the sample window is defined.</param>
+        /// <param name="window">The sample window that defines the range of time to be queried from the buffer.</param>
+        /// <returns>A collection of frames over the given sample window.</returns>
+        public List<IDictionary<MeasurementKey, IMeasurement>> GetFrames(MeasurementKey[] keys, Ticks frameTime, SampleWindow window)
+        {
+            return GetFrames(keys, frameTime, window, m_resamplingStrategy);
+        }
+
+        /// <summary>
+        /// Queries multiple signal buffers to build a list of frames of data over the given sample window.
+        /// </summary>
+        /// <param name="keys">The keys that identify the signals to be queried.</param>
+        /// <param name="frameTime">The time of the frame relative to which the sample window is defined.</param>
+        /// <param name="window">The sample window that defines the range of time to be queried from the buffer.</param>
+        /// <param name="resamplingStrategy">The strategy to use for alignment of data to the sample rate of the window.</param>
+        /// <returns>A collection of frames over the given sample window.</returns>
+        public List<IDictionary<MeasurementKey, IMeasurement>> GetFrames(MeasurementKey[] keys, Ticks frameTime, SampleWindow window, ResamplingStrategy resamplingStrategy)
+        {
+            List<IDictionary<MeasurementKey, IMeasurement>> frames = new List<IDictionary<MeasurementKey, IMeasurement>>();
+            SignalBuffer signalBuffer;
+
+            foreach (MeasurementKey key in keys)
+            {
+                if (!m_signalBuffers.TryGetValue(key, out signalBuffer))
+                    continue;
+
+                List<IMeasurement> measurements = GetMeasurements(key, frameTime, window, resamplingStrategy);
+
+                while (frames.Count < measurements.Count)
+                    frames.Add(keys.ToDictionary(k => k, k => (IMeasurement)null));
+
+                for (int i = 0; i < measurements.Count; i++)
+                    frames[i][key] = measurements[i];
+            }
+
+            return frames;
         }
 
         /// <summary>

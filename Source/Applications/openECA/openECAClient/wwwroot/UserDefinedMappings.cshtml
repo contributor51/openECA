@@ -36,52 +36,140 @@
     </style>
 }
 
-<div class="row">
-    <div class="col-md-2">
-        <label for="types">Type:</label>
-        <select class="form-control" id="types"></select>
-    </div>
-    <div class="col-md-2">
-        <label for="identifier">Mapping Identifier:</label>
-        <input class="form-control" type="text" id="identifier">
-    </div>
-
-</div>
-
-<div class="row">
-    <div class="col-md-6">
-        <ul class="list-group" id="fields"></ul>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-12">
-        <input class="btn btn-primary" type="button" id="addnewmapping" value="Save" hub-dependent/>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-12">
-        <label for="userdefinedmappings">User Defined Mappings:</label>
+<div ng-app="UserDefinedMappings">
+    <div ng-controller="MappingsCtrl">
         <p id="filelocation">File Location: </p>
-        <table class="table" id="userdefinedmappings">
+
+        <div class="input-group">
+            <input class="form-control" ng-model="searchText" placeholder="Search" type="search" ng-change="search()"/> <span class="input-group-addon">
+                <span class="glyphicon glyphicon-search"></span>
+            </span>
+        </div>
+
+        <table class="table">
             <thead>
-            <tr>
-                <th>Type</th>
-                <th>Identifier</th>
-                <th>Mappings</th>
-                <th></th>
+            <tr >
+                <th class="EmpId" style="width: 10%">
+                    <a href="#" ng-click="sort('Type')">
+                        Type
+                        <span class="{{Header[0]}}"></span>
+                    </a>
+
+                </th>
+                <th class="name" style="width: 25%">
+                    <a ng-click="sort('Identifier')" href="#">
+                        Identifier
+                        <span class="{{Header[1]}}"></span>
+                    </a>
+                </th>
+                <th class="Email" style="width: 60%">
+                    <a ng-click="sort('Mappings')" href="#">
+                        Mappings
+                        <span class="{{Header[2]}}"></span>
+                    </a>
+                </th>
+                <th class="pull-right" style="width: 6%">
+                </th>
             </tr>
             </thead>
-            <tbody></tbody>
+            <tbody>
+            <tr ng-repeat="item in pagedMappings[currentPage - 1]">
+                <td>{{item.Type.Category + ' ' + item.Type.Identifier}}</td>
+                <td>{{item.Identifier}}</td>
+                <td>{{getExpressions(item)}}</td>
+                <td><button id="updatebtn{{$index}}" class="btn btn-link" style="padding: 0;" ng-click="updateMapping(item)"><span class="glyphicon glyphicon-pencil"></span></button><button id="btn{{$index}}" class="btn btn-link" style="padding: 5px;" ng-click="removeMapping(item)"><span class="glyphicon glyphicon-remove-sign"></span></button></td>
+            </tr>
+            </tbody>
         </table>
+
+        <div class="pull-left">
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-default" ng-disabled="currentPage == 1" ng-click="firstPage()"><span class="glyphicon glyphicon-backward"></span></button>
+                <button type="button" class="btn btn-default" ng-disabled="currentPage == 1" ng-click="minusPage()"><span class="glyphicon glyphicon-triangle-left"></span></button>
+            </div>
+            <input type="number" class="content input-sm" style="padding: 0 0 0 5px; width: 55px" ng-model="currentPage">
+            <em class="validationMessage small" style="display: none;"></em>
+            &nbsp;of&nbsp;
+            <span ng-bind="pageCount"></span>
+            &nbsp;
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-default" ng-disabled="currentPage == pageCount" ng-click="plusPage()"><span class="glyphicon glyphicon-triangle-right"></span></button>
+                <button type="button" class="btn btn-default" ng-disabled="currentPage == pageCount" ng-click="lastPage()"><span class="glyphicon glyphicon-forward"></span></button>
+            </div>
+        </div>
+        <button type="button" class="btn btn-primary pull-right" data-toggle="modal" data-target="#myModal">Add Mapping</button>
+
+        <div class="pull-right">
+            Rows:
+            <div class="btn-group">
+                <button ng-class="{active: pageSize == 10}" class="btn btn-default" ng-click="setPageSize(10)">10</button>
+                <button ng-class="{active: pageSize == 25}" class="btn btn-default" ng-click="setPageSize(25)">25</button>
+                <button ng-class="{active: pageSize == 50}" class="btn btn-default" ng-click="setPageSize(50)">50</button>
+                <button ng-class="{active: pageSize == 100}" class="btn btn-default" ng-click="setPageSize(100)">100</button>
+            </div>
+        </div>
+
+        <!-- Modal -->
+        <div id="myModal" class="modal fade" role="dialog">
+            <div class="modal-dialog">
+
+                <!-- Modal content-->
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">Add/Edit Mapping</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="types">Type:</label>
+                                <select class="form-control" id="types">
+                                    <option ng-repeat="x in type" value="{{x.Category + '~' + x.Identifier + '~' + x.IsArray + '~' + x.IsUserDefined + '~' + $index}}">{{ x.Category + ' ' + x.Identifier}}</option>
+                                </select>
+
+                            </div>
+                            <div class="col-md-6">
+                                <label for="identifier">Mapping Identifier:</label>
+                                <input class="form-control" type="text" id="identifier">
+                            </div>
+
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <ul class="list-group" id="fields"></ul>
+                            </div>
+                        </div>
+
+                        @*<div class="row">
+                            <div class="col-md-12">
+                                <input class="btn btn-primary" type="button" id="addnewmapping" value="Save" hub-dependent />
+                            </div>
+                        </div>*@
+
+
+                    </div>
+                    <div class="modal-footer">
+                        <button id="addnewmapping" type="button" class="btn btn-primary" data-dismiss="modal" hub-dependent>Save</button>
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+
     </div>
+
+
+
 </div>
+
 
 <div id="errors">
     <div id="modal-errors" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="confirm-modal" aria-hidden="true">
         <div class="modal-vertical-align-container">
-            <div class="modal-dialog modal-vertical-align-center">
+            <div class="modal-dialog  modal-vertical-align-center">
                 <div class="modal-content">
                     <div class="modal-header">
                         <a class="close" data-dismiss="modal">×</a>
@@ -101,6 +189,8 @@
 <!-- Do not delete, used to append dynamic modals to-->
 <div id="modals"></div>
 
+
+
 @section Scripts {
     <script>
         "use strict";
@@ -116,20 +206,6 @@
         $(function () {
             $('#addnewmapping').attr('disabled', 'disabled');
 
-            //$(window).bind('beforeunload', function (event) {
-            //    var flag = false;
-            //    $.each($('input[type=text]'), function (i, d) {
-            //        if ($(d).val() != '')
-            //            flag = true;
-            //    });
-
-            //    if (flag) {
-            //        return "There is unsaved data on this page.  If you were editing a mapping and leave now the changes will be lost.";
-            //    }
-
-            //    return undefined;
-            //});
-
             $(window).on("hubConnected", function (event) {
                 dataHub.initializeSubscriptions().fail(function (error) {
                     showErrorMessage(error);
@@ -139,7 +215,6 @@
                     $('#filelocation').append(directory);
                 });
 
-                GetData();
             });
             
             // Client function called from the dataHub when meta data gets recieved
@@ -215,21 +290,25 @@
                     for (i = 0; i < udts[index].Fields.length; ++i) {
                         var expressions = "";
 
-                        if (Array.isArray($('#input' + udts[index].Fields[i].Identifier).val())) {
-                            $.each($('#input' + udts[index].Fields[i].Identifier).val(), function (j, field) {
-                                expressions += field + ';';
+                        if (udts[index].Fields[i].Type.IsArray) {
+                            $.each($('#input' + udts[index].Fields[i].Identifier).val().split(';'), function (j, field) {
+                                if(field != '')
+                                    expressions += field + ';';
                             });
                         } else {
                             expressions = $('#input' + udts[index].Fields[i].Identifier).val();
                         }
+                        
+                        var timeWindow = $('#timeWindow' + udts[index].Fields[i].Identifier).val().trim();
 
-                        fieldMappings.push({ 'Field': udts[index].Fields[i], 'Expression': expressions });
+
+                        fieldMappings.push({ 'Field': udts[index].Fields[i], 'Expression': expressions, 'TimeWindowExpression' : timeWindow });
                     }
-
-                    const newMapping = { 'Type': udts[index], 'Identifier': $('#identifier').val(), 'FieldMappings': fieldMappings };
+                    
+                    const newMapping = { 'Type': udts[index], 'Identifier': $('#identifier').val(), 'FieldMappings': fieldMappings  };
 
                     dataHub.addMapping(newMapping).done(function () {
-                        GetData();
+                        angular.element('[ng-controller=MappingsCtrl]').scope().getData();
                     }).fail(function (error) {
                         showErrorMessage(error);
                     });
@@ -237,82 +316,208 @@
             });
         });
     
-        function GetData() {
-            udts = [];
-            mappings = [];
+        var userDefinedMappings = angular.module('UserDefinedMappings', []);
+        var MappingsCtrl = userDefinedMappings.controller('MappingsCtrl', function ($scope) {
+            $scope.rawData;
+            $scope.sortBy = 'Type';
+            $scope.reverse = false;
+            $scope.sortDirection = true;  // true for ascending and false for descending
+            $scope.Header = ['glyphicon glyphicon-chevron-up', '', '', '', '', ''];
+            $scope.searchText = '';
+            $scope.pageSize = 10;
+            $scope.currentPage = 1;
+            $scope.pageCount;
+            $scope.pagedMappings = [];
+            $scope.type;
 
-            $('#identifier').val("");
-            $('#types').empty();
-            $('#userdefinedmappings tbody').empty();
+            $(window).on("hubConnected", function (event) {
+                $scope.getData();
+            });
+            
+            $scope.getData = function () {
+                udts = [];
+                dataHub.getDefinedTypes().done(function (types) {
+                    $scope.type = udts = $.grep(types, function (d) { return d.IsUserDefined });
+                    $scope.$apply();
+                    UpdateTypeMappings();
 
-            dataHub.getDefinedTypes().done(function (data) {
-                $.each(data, function (i, dataType) {
-                    if (dataType.IsUserDefined) {
-                        $('#types').append($('<option />').val(dataType.Category + '~' + dataType.Identifier + '~' + dataType.IsArray + '~' + dataType.IsUserDefined + '~' + i).text(dataType.Category + ' ' + dataType.Identifier));
-                        udts.push(dataType);
-                    }
-                });
+                    dataHub.getDefinedMappings().done(function (data) {
+                        $scope.rawData = data;
+                        $scope.pageCount = Math.ceil(data.length / $scope.pageSize);
+                        $scope.setPages($scope.rawData);
+                        $scope.$apply();
+                        $('#recordCount').text(data.length);
 
-                UpdateTypeMappings();
+                    });
+                    dataHub.getMappingCompilerErrors().done(function (data) {
+                        errorList = data;
 
-                dataHub.getDefinedMappings().done(function (data) {
-                    $.each(data, function (i, typeMapping) {
-                        var fieldsString = '';
+                        if (errorList.length == 0) {
+                            if ($('#error-count').length)
+                                hideErrorMessage();
 
-                        mappings.push(typeMapping);
+                            $('#modal-errors').modal('hide');
+                        } else if (errorList.length > 0) {
+                            var anchor = $('<a href="#" id="error-count">');
 
-                        $.each(typeMapping.FieldMappings, function (i, fieldMapping) {
-                            fieldsString += fieldMapping.Field.Identifier + ' to ' + fieldMapping.Expression;
-                            if (i < typeMapping.FieldMappings.length - 1)
-                                fieldsString += ', ';
-                        });
+                            if (data.length == 1)
+                                anchor.append('1 error');
+                            else
+                                anchor.append(data.length + ' errors');
 
-                        $('#userdefinedmappings tbody').append($('<tr><td>' + typeMapping.Type.Category + ' ' + typeMapping.Type.Identifier + '</td><td>' + typeMapping.Identifier + '</td><td>' + fieldsString + '</td><td><button id="updatebtn' + i + '"class="btn btn-link" hub-dependent><span class="glyphicon glyphicon-pencil"></span></button><button id="btn' + i + '" class="btn btn-link" hub-dependent><span class="glyphicon glyphicon-remove-sign"></span></button></td></tr>'));
+                            UpdateErrorModal();
+                            showErrorMessage(anchor.prop('outerHTML') + ' occurred during mapping compilation.');
 
-                        $('#btn' + i).one('click', function (e) {
-                            RemoveMapping(typeMapping);
-                        });
-
-                        $('#updatebtn' + i).on('click', function (e) {
-                            UpdateMapping(typeMapping);
-                        });
+                            $('#error-count').click(function (e) {
+                                $('#modal-errors').modal('show');
+                                return false;
+                            });
+                        }
+                    }).fail(function (error) {
+                        showErrorMessage(error);
                     });
 
-                }).fail(function (error) {
-                    showErrorMessage(error);
                 });
-            }).fail(function (error) {
-                showErrorMessage(error);
-            });
 
-            dataHub.getMappingCompilerErrors().done(function (data) {
-                errorList = data;
+            }
 
-                if (errorList.length == 0) {
-                    if ($('#error-count').length)
-                        hideErrorMessage();
+            $scope.getExpressions = function (item) {
+                var fieldString = "";
+                $.each(item.FieldMappings, function (i, fieldMapping) {
+                    fieldString += fieldMapping.Field.Identifier + ' to ' + fieldMapping.Expression + (fieldMapping.TimeWindowExpression != null? ' ' + fieldMapping.TimeWindowExpression: '');
+                    if (i < item.FieldMappings.length - 1)
+                        fieldString += ', ';
+                });
+                return fieldString;
+            }
+            
+            $scope.setPages = function (data) {
+                var page = 0;
+                $scope.pagedMappings = [];
+                $scope.pagedMappings.push([]);
+                $.each(data, function (index, data) {
+                    if (index !== 0 && index % $scope.pageSize === 0) {
+                        $scope.pagedMappings.push([]);
+                        page++
+                    }
+                    $scope.pagedMappings[page].push(data);
+                });
+                $scope.pageCount = page + 1;
+                $scope.currentPage = 1;
+            };
+            
+            $scope.removeMapping = function (item) {
+                RemoveMapping(item);
+            }
+            $scope.updateMapping = function (item) {
+                UpdateMapping(item);
+                $('#myModal').modal('show');
+            }
+            
+            $scope.setPageSize = function (size) {
+                $scope.pageSize = size;
+                $scope.setPages($scope.rawData);
+            };
+            
+            $scope.setPage = function (pageNumber) {
+                $scope.currentPage = pageNumber;
+            };
 
-                    $('#modal-errors').modal('hide');
-                } else if (errorList.length > 0) {
-                    var anchor = $('<a href="#" id="error-count">');
+            $scope.firstPage = function () {
+                $scope.currentPage = 1;
+            };
 
-                    if (data.length == 1)
-                        anchor.append('1 error');
-                    else
-                        anchor.append(data.length + ' errors');
+            $scope.lastPage = function () {
+                $scope.currentPage = $scope.pageCount;
+            };
 
-                    UpdateErrorModal();
-                    showErrorMessage(anchor.prop('outerHTML') + ' occurred during mapping compilation.');
+            $scope.plusPage = function () {
+                $scope.currentPage++;
+            }
+            $scope.minusPage = function () {
+                $scope.currentPage--;
+            }
+        
+            $scope.sort = function (sortBy) {
+                if (sortBy === $scope.sortBy) {
+                    $scope.reverse = !$scope.reverse;
+                }
+                $scope.sortBy = sortBy;
+                $scope.Header = ['', '', ''];
+                
+                var iconName;
 
-                    $('#error-count').click(function (e) {
-                        $('#modal-errors').modal('show');
-                        return false;
+                if ($scope.reverse)
+                    iconName = 'glyphicon glyphicon-chevron-down';
+                else
+                    iconName = 'glyphicon glyphicon-chevron-up';
+
+                if (sortBy === 'Type') {
+                    $scope.Header[0] = iconName;
+                    $scope.rawData.sort(function (a, b) {
+                        if (!$scope.reverse) {
+                            if ((a.Type.Category + ' ' + a.Type.Identifier) < (b.Type.Category + ' ' + b.Type.Identifier)) return -1;
+                            if ((a.Type.Category + ' ' + a.Type.Identifier) > (b.Type.Category + ' ' + b.Type.Identifier)) return 1;
+                            return 0;
+                        }
+                        else {
+                            if ((b.Type.Category + ' ' + b.Type.Identifier) < (a.Type.Category + ' ' + a.Type.Identifier)) return -1;
+                            if ((b.Type.Category + ' ' + b.Type.Identifier) > (a.Type.Category + ' ' + a.Type.Identifier)) return 1;
+                            return 0;
+                        }
                     });
                 }
-            }).fail(function (error) {
-                showErrorMessage(error);
-            });
-        }
+                else if (sortBy === 'Identifier') {
+                    $scope.Header[1] = iconName;
+                    $scope.rawData.sort(function(a,b){
+                        if (!$scope.reverse) {
+                            if (a.Identifier < b.Identifier) return -1;
+                            if (a.Identifier > b.Identifier) return 1;
+                            return 0;
+                        }
+                        else {
+                            if (b.Identifier < a.Identifier) return -1;
+                            if (b.Identifier > a.Identifier) return 1;
+                            return 0;
+                        }
+                    });
+                } else if (sortBy === 'Mappings') {
+                    $scope.Header[2] = iconName;
+                    $scope.rawData.sort(function(a,b){
+                        if (!$scope.reverse) {
+                            if ($scope.getExpressions(a) < $scope.getExpressions(b)) return -1;
+                            if ($scope.getExpressions(a) > $scope.getExpressions(b)) return 1;
+                            return 0;
+                        }
+                        else {
+                            if ($scope.getExpressions(b) < $scope.getExpressions(a)) return -1;
+                            if ($scope.getExpressions(b) > $scope.getExpressions(a)) return 1;
+                            return 0;
+                        }
+                    });
+                }
+                
+                $scope.setPages($scope.rawData);
+
+            };
+            
+            $scope.search = function () {
+                var array;
+                if ($scope.searchText !== "") {
+                    array = $.grep($scope.rawData, function (a, i) {
+                        return (a.Type.Category + ' ' + a.Type.Identifier).toLowerCase().indexOf($scope.searchText.toLowerCase()) >= 0 || a.Identifier.toLowerCase().indexOf($scope.searchText.toLowerCase()) >= 0 || $scope.getExpressions(a).toLowerCase().indexOf($scope.searchText.toLowerCase()) >= 0;
+                    });
+                }
+                else {
+                    array = $scope.rawData;
+                }
+                
+                $scope.setPages(array);
+            };
+
+            
+
+        });
         
         function UpdateTypeMappings() {
             $('#modals').children().remove();
@@ -325,12 +530,15 @@
 
                     $.each(udts[i].Fields, function (j, field) {
                         if (field.Type.IsArray) {
+                            buildTimeWindowModal(field.Identifier);
+                            buildRelativeTimeModal(field.Identifier);
                             if (field.Type.UnderlyingType.IsUserDefined) {
-                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><div class="input-group"><input class="form-control" id="input'+field.Identifier+'"><div class="input-group-btn"><select id="select' + field.Identifier + '" class="form-control" multiple="multiple"></select></div></div></li>'));
+                                $('#fields').append($('<li class="list-group-item" style="height: 80px"><div class="col-md-6"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label> '
+                                                    + '<div class="input-group"><input class="form-control" id="input' + field.Identifier + '"><div class="input-group-btn"><select id="select' + field.Identifier + '" class="form-control" multiple="multiple"></select></div></div></div><div class="col-md-6"><label><a id="anchor' + field.Identifier + '" class="" href="#" data-toggle="modal" data-target="#mod' + field.Identifier + 'tw">Edit Time Window</a></label><input class="form-control" type="text" id="timeWindow' + field.Identifier + '"/></div></li>'));
 
                                 dataHub.getDefinedMappings().done(function (data) {
                                     $.each(data, function (k, typeMapping) {
-                                        if (field.Type.UnderlyingType.Category === typeMapping.Type.Category && field.Type.UnderlyingType.Identifier === typeMapping.Type.Identifier)
+                                        if (field.Type.UnderlyingType.Category === typeMapping.Type.Category && field.Type.UnderlyingType.Identifier === typeMapping.Type.Identifier && $('#select' + field.Identifier).children('option' && '[value=' + typeMapping.Identifier + ']').length == 0)
                                             $('#select' + field.Identifier).append($('<option />').val(typeMapping.Identifier).text(typeMapping.Identifier));
                                     });
 
@@ -347,17 +555,41 @@
                                             else {
                                                 $('#input' + field.Identifier).val($('#input' + field.Identifier).val().replace($(option).val() + ';', ''));
                                             }
+                                            
+                                            if ($('#input' + field.Identifier).val().split(';').length > 2) {
+                                                $('#anchor' + field.Identifier).text("Edit Relative Time");
+                                                $('#anchor' + field.Identifier).attr("data-target", "#mod" + field.Identifier + "rt");
+                                            }
+                                            else {
+                                                $('#anchor' + field.Identifier).text("Edit Time Window");
+                                                $('#anchor' + field.Identifier).attr("data-target", "#mod" + field.Identifier + "tw");
+                                            }
+
+
                                         }
                                     });
+                                    
+                                    if ($('#select' + field.Identifier).val().length > 1) {
+                                        $('#anchor' + field.Identifier).text("Edit Relative Time");
+                                        $('#anchor' + field.Identifier).attr("data-target", "#mod" + field.Identifier + "rt");
+                                    }
+                                    else {
+                                        $('#anchor' + field.Identifier).text("Edit Time Window");
+                                        $('#anchor' + field.Identifier).attr("data-target", "#mod" + field.Identifier + "tw");
+
+                                    }
+
                                 }).fail(function (error) {
                                     showErrorMessage(error);
                                 });
+                                
                             }
                             else {
                                 buildModal(field.Identifier, true);
                                 $('#mod' + field.Identifier).one('show.bs.modal', function () { buildDeviceList(field.Identifier); });
 
-                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><div class="input-group"><input id="input' + field.Identifier + '" class="form-control" type="text" aria-describedby="addon' + field.Identifier + '"><span class="input-group-btn" id="addon' + field.Identifer + '"><button type="button" id="btn' + field.Identifier + '" class="btn btn-default btn-select-measurements" data-toggle="modal" data-target="#mod' + field.Identifier + '" disabled>Select</button></span></div></li>'));
+                                $('#fields').append($('<li class="list-group-item" style="height: 80px"><div class="col-md-6"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label>'
+                                    + '<div class="input-group"><input id="input' + field.Identifier + '" class="form-control" type="text" aria-describedby="addon' + field.Identifier + '"><span class="input-group-btn" id="addon' + field.Identifer + '"><button type="button" id="btn' + field.Identifier + '" class="btn btn-default btn-select-measurements" data-toggle="modal" data-target="#mod' + field.Identifier + '" disabled>Select</button></span></div></div><div class="col-md-6"><label><a id="anchor' + field.Identifier + '" class="" href="#" data-toggle="modal" data-target="#mod' + field.Identifier + 'tw">Edit Time Window</a></label><input class="form-control" type="text" id="timeWindow' + field.Identifier + '"/></div></li>'));
                                 
                                 $('#save' + field.Identifier).on('click', function () {
                                     var string = "";
@@ -369,13 +601,25 @@
                                     });
 
                                     $('#input' + field.Identifier).val(string);
+                                    
+                                    if (string.split(';').length > 1) {
+                                        $('#anchor' + field.Identifier).text("Edit Relative Time");
+                                        $('#anchor' + field.Identifier).attr("data-target", "#mod" + field.Identifier + "rt");
+                                    }
+                                    else {
+                                        $('#anchor' + field.Identifier).text("Edit Time Window");
+                                        $('#anchor' + field.Identifier).attr("data-target", "#mod" + field.Identifier + "tw");
+                                    }
+
                                     $("#mod" + field.Identifier).modal('toggle');
                                 });
                             }
                         }
                         else {
+                            buildRelativeTimeModal(field.Identifier);
                             if (field.Type.IsUserDefined) {
-                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><select id="input' + field.Identifier + '" class="form-control"></select></li>'));
+                                $('#fields').append($('<li class="list-group-item" style="height: 80px"><div class="col-md-6"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label>'
+                                    + '<select id="input' + field.Identifier + '" class="form-control"></select></div><div class="col-md-6"><label><a id="anchor' + field.Identifier + '" class="" href="#" data-toggle="modal" data-target="#mod' + field.Identifier + 'rt">Edit Relative Time</a></label><input class="form-control" type="text" id="timeWindow' + field.Identifier + '"/></div></li>'));
 
                                 dataHub.getDefinedMappings().done(function (data) {
                                     $.each(data, function (k, mapping) {
@@ -402,7 +646,8 @@
                                     });
                                 });
 
-                                $('#fields').append($('<li class="list-group-item"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label><div class="input-group"><input id="input' + field.Identifier + '" class="form-control" type="text" aria-describedby="addon' + field.Identifier + '"><span class="input-group-btn" id="addon' + field.Identifer + '"><button type="button" id="btn' + field.Identifier + '" class="btn btn-default btn-select-measurements" data-toggle="modal" data-target="#mod' + field.Identifier + '" disabled>Select</button></span></div></li>'));
+                                $('#fields').append($('<li class="list-group-item" style="height: 80px"><div class="col-md-6"><label>' + field.Type.Category + ' ' + field.Type.Identifier + ' ' + field.Identifier + ':</label>'
+                                    + '<div class="input-group"><input id="input' + field.Identifier + '" class="form-control" type="text" aria-describedby="addon' + field.Identifier + '"><span class="input-group-btn" id="addon' + field.Identifer + '"><button type="button" id="btn' + field.Identifier + '" class="btn btn-default btn-select-measurements" data-toggle="modal" data-target="#mod' + field.Identifier + '" disabled>Select</button></span></div></div><div class="col-md-6"><label><a id="anchor' + field.Identifier + '" class="" href="#" data-toggle="modal" data-target="#mod' + field.Identifier + 'rt">Edit Relative Time</a></label><input class="form-control" type="text" id="timeWindow' + field.Identifier + '"/></div></li>'));
                             }
                         }
                         //$('#fields').append($('<li class="list-group-item"><label>' + f.Type.Category + ' ' + f.Type.Identifier + ' ' + f.Identifier + ':</label><input id="input' + j + '" class="form-control" type="text"/></li>'));
@@ -416,7 +661,7 @@
 
         function RemoveMapping(data) {
             dataHub.removeMapping(data).done(function () {
-                GetData();
+                angular.element('[ng-controller=MappingsCtrl]').scope().getData();
             }).fail(function (error) {
                 showErrorMessage(error);
             });       
@@ -433,18 +678,38 @@
                 return ($(this).text() === data.Type.Category + ' ' + data.Type.Identifier); //To select Blue
             }).prop('selected', true);
 
-            UpdateTypeMappings();
+            UpdateTypeMappings();          
 
-            $.each($('#fields input[type="text"]'), function (i, mapping) {
-                $(mapping).val(data.FieldMappings[i].Expression);
-            });         
+            $.each($('#fields li div').children('[id*="input"]'), function (i, d) {
+                if (data.FieldMappings[i].Field.Type.IsArray && !data.FieldMappings[i].Field.Type.IsUserDefined) {
+                    $(d).val(data.FieldMappings[i].Expression.split(' ')[0]);
+                    $.each(data.FieldMappings[i].Expression.split(' ')[0].split(';'), function (_, field) {
+                        if(field != '')
+                            var option = $('#fields li div').children('[id*=' + data.FieldMappings[i].Field.Identifier + ']' && 'select').append('<option value="' + field + '" selected="selected">' + field + '</option>');
+                    });
+
+                }
+                else if ($(d).is('select')) {
+                    $(d).val(data.FieldMappings[i].Expression);
+                }
+                else if ($(d).is('input')) {
+                    $(d).val(data.FieldMappings[i].Expression);
+                }
+            });
+            
+            $.each($('#fields li div').children('[id*="timeWindow"]'), function (i, d) {
+                    $(d).val(data.FieldMappings[i].TimeWindowExpression);
+            });
+            
+            $('#addnewmapping').attr('disabled', false);
+
         }
         
         // Functions that validates that the input fields have text
         function MappingValidation() {
             var alerts = 0;
 
-            $.each($('input[type=text]'), function (i, field) {
+            $.each($('input[type=text]').filter(function (index, data) { if ($(data).attr('id').indexOf('timeWindow') < 0) return data }), function (i, field) {
                 if ($(field).val() === '') {
                     $(field).css('border-color', 'red');
                     ++alerts;
@@ -498,7 +763,7 @@
                         $('#input-errors').val('').attr('disabled', 'disabled');
 
                         dataHub.fixMapping(error.FilePath, contents).done(function () {
-                            GetData();
+                            angular.element('[ng-controller=MappingsCtrl]').scope().getData();
                         }).fail(function (error) {
                             showErrorMessage(error);
                         });
@@ -534,7 +799,7 @@
                 if (measurement.DeviceAcronym != null)
                     acronym = measurement.DeviceAcronym.replace(/!/g, "-").replace(measurement.DeviceAcronym.split('!')[0] + '-', "");
 
-                if (measurement.SignalAcronym !== "DIGI" && measurement.SignalAcronym !== "FLAG" && measurement.SignalAcronym !== "QUAL" && measurement.SignalAcronym !== "STAT" && measurement.SignalAcronym !== "ALOG") {
+                if (measurement.SignalAcronym !== "DIGI" && measurement.SignalAcronym !== "FLAG" && measurement.SignalAcronym !== "QUAL" && measurement.SignalAcronym !== "STAT" && measurement.SignalAcronym !== "ALRM") {
                     let sigref = measurement.SignalReference.replace(/!/g, "-");
                     sigref = sigref.replace(measurement.DeviceAcronym.replace(/!/g, "-") + "-", "");
                     $('#tb' + id+ acronym).append('<tr title="' + measurement.Description + '"><td nowrap><label class="checkbox-inline"><input type="checkbox" id="cb'+id + measurement.ID + '" value="' + measurement.ID +'">' + measurement.ID.split(':')[1] + '</td><td>' + sigref + '</td><td>' + measurement.SignalAcronym + '</td><td>'+measurement.Description+'</td></tr>');
@@ -571,6 +836,320 @@
 
             $('#' + acronym).html(html);
             $("#mod" + acronym).modal({ 'show': false });
+        }
+        
+        // used to build time window modals
+        function buildTimeWindowModal(acronym) {
+            $("#modals").append('<div id="' + acronym + 'tw"></div>');
+
+            let html =  '<div id="mod' + acronym + 'tw" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="confirm-modal" aria-hidden="true">';
+            html +=     '   <div class="modal-vertical-align-container">'
+            html +=     '       <div class="modal-dialog modal-lg  modal-vertical-align-center">';
+            html +=     '           <div class="modal-content">';
+            html +=     '               <div class="modal-header">';
+            html +=     '                   <a class="close" data-dismiss="modal">×</a>';
+            html +=     '                   <h4>' + acronym + ' Sliding Window Mapping Editor</h4>';
+            html +=     '               </div>';
+            html +=     '               <div class="modal-body" style="height: 300px; overflow-y: auto" >';
+            html +=     '                  <label>Time Window:</label>'
+            html +=     '                  <select class="form-control selectAfterCancel" id="select' + acronym + 'tw">';
+            html +=     '                      <option value="99">None</option>';
+            html +=     '                      <option value="0">last &lt;Number&gt; &lt;TimeUnit&gt; </option>';
+            html +=     '                      <option value="1">last &lt;Number&gt; &lt;TimeUnit&gt; &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html +=     '                      <option value="2">last &lt;Number&gt; points </option>';
+            html +=     '                      <option value="3">last &lt;Number&gt; points &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html +=     '                      <option value="4">from &lt;Number&gt; &lt;TimeUnit&gt; ago for &lt;Number&gt; &lt;TimeUnit&gt;</option>';
+            //html +=     '                      <option value="5">from &lt;Number&gt; &lt;TimeUnit&gt; ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; &lt;TimeUnit&gt; </option>';
+            html +=     '                      <option value="6">from &lt;Number&gt; &lt;TimeUnit&gt; ago for &lt;Number&gt; &lt;TimeUnit&gt; &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            //html +=     '                      <option value="7">from &lt;Number&gt; &lt;TimeUnit&gt; ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; &lt;TimeUnit&gt; &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html +=     '                      <option value="8">from &lt;Number&gt; points ago for &lt;Number&gt; &lt;TimeUnit&gt;</option>';
+            //html +=     '                      <option value="9">from &lt;Number&gt; points ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; &lt;TimeUnit&gt; </option>';
+            html +=     '                      <option value="10">from &lt;Number&gt; points ago for &lt;Number&gt; &lt;TimeUnit&gt; &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            //html +=     '                      <option value="11">from &lt;Number&gt; points ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; &lt;TimeUnit&gt; &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html +=     '                      <option value="12">from &lt;Number&gt; &lt;TimeUnit&gt; ago for &lt;Number&gt; points</option>';
+            //html +=     '                      <option value="13">from &lt;Number&gt; &lt;TimeUnit&gt; ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; points </option>';
+            html +=     '                      <option value="14">from &lt;Number&gt; &lt;TimeUnit&gt; ago for &lt;Number&gt; points &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            //html +=     '                      <option value="15">from &lt;Number&gt; &lt;TimeUnit&gt; ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; points &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html +=     '                      <option value="16">from &lt;Number&gt; points ago for &lt;Number&gt; points</option>';
+            //html +=     '                      <option value="17">from &lt;Number&gt; points ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; points </option>';
+            html +=     '                      <option value="18">from &lt;Number&gt; points ago for &lt;Number&gt; points &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            //html +=     '                      <option value="19">from &lt;Number&gt; points ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt; for &lt;Number&gt; points &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html +=     '                  </select>';
+            html +=     '                  <hr/>';
+            html +=     '                  <div id="secondMap' + acronym + 'tw" class="deleteAfterCancel"></div>';
+            html +=     '                  <hr/>';
+            html +=     '                  <label>Mapping Text:</label>';
+            html +=     '                  <textarea class="form-control clearAfterCancel" id="textarea'+ acronym +'tw"></textarea>';
+            html +=     '               </div>';
+            html +=     '               <div class="modal-footer">';
+            html +=     '                  <button class="btn btn-primary" data-dismiss="modal" onclick="saveWindow(' + "mod" + acronym + "tw" + ', \''+acronym+'\')">Save</button>'; // save button
+            html +=     '                  <span class="btn btn-default" data-dismiss="modal" onclick="clearFields(' + "mod" + acronym + "tw" + ')">Cancel</span>'; // close button
+            html +=     '               </div>';
+            html +=     '           </div>';
+            html +=     '       </div>';  
+            html +=     '   </div>';  // modalWindow
+            html +=     '</div>';
+
+            $('#' + acronym + 'tw').html(html);
+            
+            $('#secondMap' + acronym).children().remove();
+
+            $.each($('#select'+acronym+'tw option:selected').text().split(' '), function (index, word) {
+                if (index == 0 && word == 'None') {
+                    $('#textarea' + acronym + 'tw').text('');
+                    return;
+                }
+
+                if (word.indexOf('Number') > 0) {
+                    $('#secondMap' + acronym).append('<input type="number"></input>');
+                }
+                else if (word.indexOf('TimeUnit') > 0) {
+                    $('#secondMap' + acronym + 'tw').append('<select>' +
+                                                        '<option>microseconds</option>' +
+                                                        '<option>milliseconds</option>' +
+                                                        '<option>seconds</option>' +
+                                                        '<option>minutes</option>' +
+                                                        '<option>hours</option>' +
+                                                        '<option>days</option>' +
+                                                    '</select>');
+                }
+                else {
+                    $('#secondMap' + acronym + 'tw').append('<span>'+word+'</span>');
+                }
+                
+                $('#secondMap' + acronym + 'tw').append('<span>&nbsp;</span>');
+            });
+            
+            var string = "";
+            $.each($('#secondMap' + acronym + 'tw').children(), function (i, object) {
+                if ($(object).is('select'))
+                    string += $(object).children(':selected').text();
+                else
+                    string += $(object).text();
+            });
+            $('#textarea' + acronym + 'tw').text(string);
+            
+            $($('#secondMap' + acronym + 'tw').children()).on('keyup change', function (event) {
+                var string = "";
+                $.each($('#secondMap' + acronym + 'tw').children(), function (i, object) {
+                    if ($(object).is('select'))
+                        string += $(object).children(':selected').text();
+                    else if ($(object).is('input'))
+                        string += $(object).val();
+                    else
+                        string += $(object).text();
+                });
+                $('#textarea' + acronym + 'tw').text(string);
+            });
+
+            $('#select' + acronym + 'tw').on('change', function (event) {
+                $('#secondMap' + acronym + 'tw').children().remove();
+
+                $.each($('#select'+acronym+'tw option:selected').text().split(' '), function (index, word) {
+                    if (index == 0 && word == 'None') {
+                        $('#textarea' + acronym + 'tw').text('');
+                        return;
+                    }
+
+                    if (word.indexOf('Number') > 0) {
+                        $('#secondMap' + acronym + 'tw').append('<input type="number"></input>');
+                    }
+                    else if (word.indexOf('TimeUnit') > 0) {
+                        $('#secondMap' + acronym + 'tw').append('<select>' +
+                                                            '<option>microseconds</option>' +
+                                                            '<option>milliseconds</option>' +
+                                                            '<option>seconds</option>' +
+                                                            '<option>minutes</option>' +
+                                                            '<option>hours</option>' +
+                                                            '<option>days</option>' +
+                                                        '</select>');
+                    }
+                    else {
+                        $('#secondMap' + acronym + 'tw').append('<span>' + word + '</span>');
+                    }
+
+                    $('#secondMap' + acronym + 'tw').append('<span>&nbsp;</span>');
+                });
+                
+                
+                $($('#secondMap' + acronym + 'tw').children()).on('keyup change', function (event) {
+                    var string = "";
+                    $.each($('#secondMap' + acronym + 'tw').children(), function (i, object) {
+                        if ($(object).is('select'))
+                            string += $(object).children(':selected').text();
+                        else if ($(object).is('input'))
+                            string += $(object).val();
+                        else
+                            string += $(object).text();
+                    });
+                    $('#textarea' + acronym + 'tw').text(string);
+                });
+
+                var string = "";
+                $.each($('#secondMap' + acronym + 'tw').children(), function (i, object) {
+                    if ($(object).is('select'))
+                        string += $(object).children(':selected').text();
+                    else
+                        string += $(object).text();
+                });
+                $('#textarea' + acronym + 'tw').text(string);
+            });
+            $("#mod" + acronym + 'tw').modal({ 'show': false });
+
+        }
+        
+        // used to build relative time window modals
+        function buildRelativeTimeModal(acronym) {
+            $("#modals").append('<div id="' + acronym + 'rt"></div>');
+
+            let html = '<div id="mod' + acronym + 'rt" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="confirm-modal" aria-hidden="true">';
+            html += '   <div class="modal-vertical-align-container">'
+            html += '       <div class="modal-dialog modal-lg  modal-vertical-align-center">';
+            html += '           <div class="modal-content">';
+            html += '               <div class="modal-header">';
+            html += '                   <a class="close" data-dismiss="modal">×</a>';
+            html += '                   <h4>' + acronym + ' Sliding Window Mapping Editor</h4>';
+            html += '               </div>';
+            html += '               <div class="modal-body" style="height: 300px; overflow-y: auto" >';
+            html += '                  <label>Relative Time:</label>'
+            html += '                  <select class="form-control selectAfterCancel" id="select' + acronym + 'rt">';
+            html += '                      <option value="99">None</option>';
+            html += '                      <option value="0"> &lt;Number&gt; &lt;TimeUnit&gt; ago </option>';
+            html += '                      <option value="1"> &lt;Number&gt; &lt;TimeUnit&gt; ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html += '                      <option value="2"> &lt;Number&gt; points ago</option>';
+            html += '                      <option value="3"> &lt;Number&gt; points ago &#64; &lt;Number&gt; per &lt;TimeUnit&gt;</option>';
+            html += '                  </select>';
+            html += '                  <hr/>';
+            html += '                  <div id="secondMap' + acronym + 'rt" class="deleteAfterCancel"></div>';
+            html += '                  <hr/>';
+            html += '                  <label>Mapping Text:</label>';
+            html += '                  <textarea class="form-control clearAfterCancel" id="textarea' + acronym + 'rt"></textarea>';
+            html += '               </div>';
+            html += '               <div class="modal-footer">';
+            html += '                  <button class="btn btn-primary" data-dismiss="modal" onclick="saveWindow(' + "mod" + acronym + "rt" + ', \'' + acronym + '\')">Save</button>'; // save button
+            html += '                  <button class="btn btn-default" data-dismiss="modal" onclick="clearFields('+ "mod"+acronym+"rt"+')">Cancel</button>'; // close button
+            html += '               </div>';
+            html += '           </div>';
+            html += '       </div>';
+            html += '   </div>';  // modalWindow
+            html += '</div>';
+
+            $('#' + acronym + 'rt').html(html);
+
+            $('#secondMap' + acronym).children().remove();
+
+            $.each($('#select' + acronym + 'rt option:selected').text().split(' '), function (index, word) {
+                if (index == 0 && word == 'None') {
+                    $('#textarea' + acronym + 'rt').text('');
+                    return;
+                }
+
+                if (word.indexOf('Number') > 0) {
+                    $('#secondMap' + acronym + 'rt').append('<input type="number"></input>');
+                }
+                else if (word.indexOf('TimeUnit') > 0) {
+                    $('#secondMap' + acronym + 'rt').append('<select>' +
+                                                        '<option>microseconds</option>' +
+                                                        '<option>milliseconds</option>' +
+                                                        '<option>seconds</option>' +
+                                                        '<option>minutes</option>' +
+                                                        '<option>hours</option>' +
+                                                        '<option>days</option>' +
+                                                    '</select>');
+                }
+                else {
+                    $('#secondMap' + acronym + 'rt').append('<span>' + word + '</span>');
+                }
+
+                $('#secondMap' + acronym + 'rt').append('<span>&nbsp;</span>');
+            });
+
+            var string = "";
+            $.each($('#secondMap' + acronym + 'rt').children(), function (i, object) {
+                if ($(object).is('select'))
+                    string += $(object).children(':selected').text();
+                else
+                    string += $(object).text();
+            });
+            $('#textarea' + acronym + 'rt').text(string);
+
+            $($('#secondMap' + acronym + 'rt').children()).on('keyup change', function (event) {
+                var string = "";
+                $.each($('#secondMap' + acronym + 'rt').children(), function (i, object) {
+                    if ($(object).is('select'))
+                        string += $(object).children(':selected').text();
+                    else if ($(object).is('input'))
+                        string += $(object).val();
+                    else
+                        string += $(object).text();
+                });
+                $('#textarea' + acronym + 'rt').text(string);
+            });
+
+            $('#select' + acronym + 'rt').on('change', function (event) {
+                $('#secondMap' + acronym + 'rt').children().remove();
+
+                $.each($('#select' + acronym + 'rt option:selected').text().split(' '), function (index, word) {
+                    if (index == 0 && word == 'None') {
+                        $('#textarea' + acronym + 'rt').text('');
+                        return;
+                    }
+
+                    if (word.indexOf('Number') > 0) {
+                        $('#secondMap' + acronym + 'rt').append('<input type="number"></input>');
+                    }
+                    else if (word.indexOf('TimeUnit') > 0) {
+                        $('#secondMap' + acronym + 'rt').append('<select>' +
+                                                            '<option>microseconds</option>' +
+                                                            '<option>milliseconds</option>' +
+                                                            '<option>seconds</option>' +
+                                                            '<option>minutes</option>' +
+                                                            '<option>hours</option>' +
+                                                            '<option>days</option>' +
+                                                        '</select>');
+                    }
+                    else {
+                        $('#secondMap' + acronym + 'rt').append('<span>' + word + '</span>');
+                    }
+
+                    $('#secondMap' + acronym + 'rt').append('<span>&nbsp;</span>');
+                });
+
+
+                $($('#secondMap' + acronym + 'rt').children()).on('keyup change', function (event) {
+                    var string = "";
+                    $.each($('#secondMap' + acronym + 'rt').children(), function (i, object) {
+                        if ($(object).is('select'))
+                            string += $(object).children(':selected').text();
+                        else if ($(object).is('input'))
+                            string += $(object).val();
+                        else
+                            string += $(object).text();
+                    });
+                    $('#textarea' + acronym + 'rt').text(string);
+                });
+
+                var string = "";
+                $.each($('#secondMap' + acronym + 'rt').children(), function (i, object) {
+                    if ($(object).is('select'))
+                        string += $(object).children(':selected').text();
+                    else
+                        string += $(object).text();
+                });
+                $('#textarea' + acronym + 'rt').text(string);
+            });
+            $("#mod" + acronym + 'rt').modal({ 'show': false });
+
+        }
+        
+        function clearFields(mod) {
+             $(mod).find('.selectAfterCancel').val(99);
+             $(mod).find('.clearAfterCancel').text('');
+             $(mod).find('.deleteAfterCancel').children().remove();
+        };
+        
+        function saveWindow(mod, acronym) {
+            $('#timeWindow' + acronym).val($(mod).find('textarea').text());
         }
     </script>
 }

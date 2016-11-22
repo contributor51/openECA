@@ -20,18 +20,18 @@ from GSF.TimeSeries import *
 from Algorithm import Algorithm
 
 class Mapper(MapperBase): # For {ProjectName}
-    def __new__(self, lookup):        
-        self._index = 0
-        return MapperBase.__new__(self, lookup, "{InputMapping}")
+    def __new__(self, framework):        
+        return MapperBase.__new__(self, framework, "{InputMapping}")
 
     def Map(self, measurements):
-        self._index = 0
         self.SignalLookup.UpdateMeasurementLookup(measurements)
         inputMapping = self.MappingCompiler.GetTypeMapping(self.InputMapping)
 
-        input = self.Create{InputCategoryIdentifier}{InputTypeIdentifier}(inputMapping)
+        inputData = self.Create{InputCategoryIdentifier}{InputDataTypeIdentifier}(inputMapping)
+        self.KeyIndex = 0
+        inputMeta = self.Create{InputCategoryIdentifier}{InputMetaTypeIdentifier}(inputMapping)
 
-        output = Algorithm.Execute(input)
+        outputData = Algorithm.Execute(inputData, inputMeta) # <- {OutputDataTypeName}
 
         # TODO: Later versions will publish output to the openECA server
 

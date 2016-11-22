@@ -27,8 +27,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using ECAClientUtilities.Model;
+using ECACommonUtilities;
+using ECACommonUtilities.Model;
 
+// ReSharper disable RedundantStringInterpolation
 namespace ECAClientUtilities.Template.FSharp
 {
     public class ProjectGenerator : DotNetProjectGeneratorBase
@@ -45,16 +47,16 @@ namespace ECAClientUtilities.Template.FSharp
         {
             m_primitiveDefaultValues = new Dictionary<string, string>()
             {
-                { "Integer.Byte", "0" },
-                { "Integer.Int16", "0" },
+                { "Integer.Byte", "0uy" },
+                { "Integer.Int16", "0s" },
                 { "Integer.Int32", "0" },
-                { "Integer.Int64", "0" },
-                { "Integer.UInt16", "0" },
-                { "Integer.UInt32", "0" },
-                { "Integer.UInt64", "0" },
-                { "FloatingPoint.Decimal", "0.0" },
+                { "Integer.Int64", "0L" },
+                { "Integer.UInt16", "0us" },
+                { "Integer.UInt32", "0u" },
+                { "Integer.UInt64", "0UL" },
+                { "FloatingPoint.Decimal", "0.0M" },
                 { "FloatingPoint.Double", "0.0" },
-                { "FloatingPoint.Single", "0.0" },
+                { "FloatingPoint.Single", "0.0F" },
                 { "DateTime.Date", "System.DateTime.MinValue" },
                 { "DateTime.DateTime", "System.DateTime.MinValue" },
                 { "DateTime.Time", "System.DateTime.MinValue" },
@@ -70,7 +72,7 @@ namespace ECAClientUtilities.Template.FSharp
 
         #region [ Methods ]
 
-        protected override string ConstructModel(UserDefinedType type)
+        protected override string ConstructDataModel(UserDefinedType type)
         {
             // Build the list of fields as properties of the generated class
             StringBuilder fieldList = new StringBuilder();
@@ -79,18 +81,18 @@ namespace ECAClientUtilities.Template.FSharp
             foreach (UDTField field in type.Fields)
             {
                 string fieldName = GetParameterName(field.Identifier);
-                fieldList.AppendLine($"    let mutable m_{fieldName} : {GetTypeName(field.Type)} = {fieldName}");
+                fieldList.AppendLine($"    let mutable m_{fieldName} : {GetDataTypeName(field.Type)} = {fieldName}");
                 propertyList.AppendLine($"    member public this.{field.Identifier} with get() = m_{fieldName} and set(value) = m_{fieldName} <- value");
             }
 
             string constructorParams = string.Join(", ", type.Fields
-                .Select(param => $"{GetParameterName(param.Identifier)} : {GetTypeName(param.Type)}"));
+                .Select(param => $"{GetParameterName(param.Identifier)} : {GetDataTypeName(param.Type)}"));
 
             string defaultConstructorParams = string.Join(", ", type.Fields
-                .Select(param => $"{GetDefaultValue(param.Type)}"));
+                .Select(param => $"{GetDefaultDataValue(param.Type)}"));
 
             // Generate the contents of the class file
-            return GetTextFromResource("ECAClientUtilities.Template.FSharp.UDTTemplate.txt")
+            return GetTextFromResource("ECAClientUtilities.Template.FSharp.UDTDataTemplate.txt")
                 .Replace("{ProjectName}", ProjectName)
                 .Replace("{Category}", type.Category)
                 .Replace("{Identifier}", type.Identifier)
@@ -99,7 +101,36 @@ namespace ECAClientUtilities.Template.FSharp
                 .Replace("{DefaultConstructorParams}", defaultConstructorParams);
         }
 
-        protected override string ConstructMapping(UserDefinedType type)
+        protected override string ConstructMetaModel(UserDefinedType type)
+        {
+            // Build the list of fields as properties of the generated class
+            StringBuilder fieldList = new StringBuilder();
+            StringBuilder propertyList = new StringBuilder();
+
+            foreach (UDTField field in type.Fields)
+            {
+                string fieldName = GetParameterName(field.Identifier);
+                fieldList.AppendLine($"    let mutable m_{fieldName} : {GetMetaTypeName(field.Type)} = {fieldName}");
+                propertyList.AppendLine($"    member public this.{field.Identifier} with get() = m_{fieldName} and set(value) = m_{fieldName} <- value");
+            }
+
+            string constructorParams = string.Join(", ", type.Fields
+                .Select(param => $"{GetParameterName(param.Identifier)} : {GetMetaTypeName(param.Type)}"));
+
+            string defaultConstructorParams = string.Join(", ", type.Fields
+                .Select(param => $"{GetDefaultMetaValue(param.Type)}"));
+
+            // Generate the contents of the class file
+            return GetTextFromResource("ECAClientUtilities.Template.FSharp.UDTMetaTemplate.txt")
+                .Replace("{ProjectName}", ProjectName)
+                .Replace("{Category}", type.Category)
+                .Replace("{Identifier}", GetMetaIdentifier(type.Identifier))
+                .Replace("{Fields}", $"{fieldList}{Environment.NewLine}{propertyList}")
+                .Replace("{ConstructorParams}", constructorParams)
+                .Replace("{DefaultConstructorParams}", defaultConstructorParams);
+        }
+
+        protected override string ConstructMapping(UserDefinedType type, bool isMetaType)
         {
             StringBuilder mappingCode = new StringBuilder();
 
@@ -108,30 +139,76 @@ namespace ECAClientUtilities.Template.FSharp
                 // Get the field type and its
                 // underlying type if it is an array
                 DataType fieldType = field.Type;
-                DataType underlyingType = (field.Type as ArrayType)?.UnderlyingType;
+                DataType underlyingType = (fieldType as ArrayType)?.UnderlyingType;
+                string fieldIdentifier = field.Identifier;
 
                 // For user-defined types, call the method to generate an object of their corresponding data type
                 // For primitive types, call the method to get the values of the mapped measurements
                 // ReSharper disable once PossibleNullReferenceException
                 if (fieldType.IsArray && underlyingType.IsUserDefined)
                 {
-                    mappingCode.AppendLine($"        obj.{field.Identifier} <- this.MappingCompiler.EnumerateTypeMappings(fieldLookup.Item(\"{field.Identifier}\").Expression).Select(fun typeMapping -> this.Create{underlyingType.Category}{underlyingType.Identifier}(typeMapping)).ToArray()");
+                    string arrayTypeName = GetTypeName(underlyingType, isMetaType);
+
+                    mappingCode.AppendLine($"        do");
+                    mappingCode.AppendLine($"            // Create {arrayTypeName} UDT array for \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            base.PushCurrentFrame()");
+                    mappingCode.AppendLine($"            let arrayMapping = fieldLookup.Item(\"{fieldIdentifier}\") :?> ArrayMapping");
+                    mappingCode.AppendLine($"            let count = base.GetUDTArrayTypeMappingCount(arrayMapping)");
+                    mappingCode.AppendLine();
+                    // This loop from 1 to count is properly offset in the local member methods that shadow mapper base functions,
+                    // this is required for calling base functions from within an F# lambda expression (see MapperTemplate.txt)
+                    mappingCode.AppendLine($"            let list = [1..count] |> List.map(fun i ->");
+                    mappingCode.AppendLine($"                let nestedMapping = this.GetUDTArrayTypeMapping(arrayMapping, i)");
+                    mappingCode.AppendLine($"                this.Create{underlyingType.Category}{GetIdentifier(underlyingType, isMetaType)}(nestedMapping))");
+                    mappingCode.AppendLine();
+                    mappingCode.AppendLine($"            obj.{fieldIdentifier} <- list.ToArray()");
+                    mappingCode.AppendLine($"            base.PopCurrentFrame()");
                 }
                 else if (fieldType.IsUserDefined)
                 {
-                    mappingCode.AppendLine($"        obj.{field.Identifier} <- this.Create{field.Type.Category}{field.Type.Identifier}(this.MappingCompiler.GetTypeMapping(fieldLookup.Item(\"{field.Identifier}\").Expression))");
+                    string fieldTypeName = GetTypeName(fieldType, isMetaType);
+
+                    mappingCode.AppendLine($"        do");
+                    mappingCode.AppendLine($"            // Create {fieldTypeName} UDT for \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            let fieldMapping = fieldLookup.Item(\"{fieldIdentifier}\")");
+                    mappingCode.AppendLine($"            let nestedMapping = base.GetTypeMapping(fieldMapping)");
+                    mappingCode.AppendLine();
+                    mappingCode.AppendLine($"            base.PushRelativeFrame(fieldMapping)");
+                    mappingCode.AppendLine($"            obj.{fieldIdentifier} <- this.Create{fieldType.Category}{GetIdentifier(fieldType, isMetaType)}(nestedMapping)");
+                    mappingCode.AppendLine($"            base.PopRelativeFrame(fieldMapping)");
                 }
                 else if (fieldType.IsArray)
                 {
-                    string arrayTypeName = GetTypeName(underlyingType);
-                    mappingCode.AppendLine($"        obj.{field.Identifier} <- this.SignalLookup.GetMeasurements(this.Keys.[m_index]).Select(fun measurement -> Convert.ChangeType(measurement.Value, typedefof<{arrayTypeName}>) :?> {arrayTypeName}).ToArray()");
-                    mappingCode.AppendLine("        m_index <- m_index + 1");
+                    string arrayTypeName = GetTypeName(underlyingType, isMetaType);
+
+                    mappingCode.AppendLine($"        do");
+                    mappingCode.AppendLine($"            // Create {arrayTypeName} array for \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            let arrayMapping = fieldLookup.Item(\"{fieldIdentifier}\") :?> ArrayMapping");
+                    mappingCode.AppendLine($"            let count = base.GetArrayMeasurementCount(arrayMapping)");
+                    mappingCode.AppendLine();
+                    // This loop from 1 to count is properly offset in the local member methods that shadow mapper base functions,
+                    // this is required for calling base functions from within an F# lambda expression (see MapperTemplate.txt)
+                    mappingCode.AppendLine($"            let list = [1..count] |> List.map(fun i ->");
+                    mappingCode.AppendLine($"                let measurement = this.GetArrayMeasurement(i)");
+                    if (isMetaType)
+                        mappingCode.AppendLine($"                this.GetMetaValues(measurement)");
+                    else
+                        mappingCode.AppendLine($"                Convert.ChangeType(measurement.Value, typedefof<{arrayTypeName}>) :?> {arrayTypeName})");
+                    mappingCode.AppendLine();
+                    mappingCode.AppendLine($"            obj.{fieldIdentifier} <- list.ToArray()");
                 }
                 else
                 {
-                    string fieldTypeName = GetTypeName(field.Type);
-                    mappingCode.AppendLine($"        obj.{field.Identifier} <- Convert.ChangeType(this.SignalLookup.GetMeasurement(this.Keys.[m_index].[0]).Value, typedefof<{fieldTypeName}>) :?> {fieldTypeName}");
-                    mappingCode.AppendLine("        m_index <- m_index + 1");
+                    string fieldTypeName = GetTypeName(fieldType, isMetaType);
+
+                    mappingCode.AppendLine($"        do");
+                    mappingCode.AppendLine($"            // Assign {fieldTypeName} value to \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            let fieldMapping = fieldLookup.Item(\"{fieldIdentifier}\")");
+                    mappingCode.AppendLine($"            let measurement = base.GetMeasurement(fieldMapping)");
+                    if (isMetaType)
+                        mappingCode.AppendLine($"            obj.{fieldIdentifier} <- base.GetMetaValues(measurement)");
+                    else
+                        mappingCode.AppendLine($"            obj.{fieldIdentifier} <- Convert.ChangeType(measurement.Value, typedefof<{fieldTypeName}>) :?> {fieldTypeName}");
                 }
 
                 mappingCode.AppendLine();
@@ -175,7 +252,7 @@ namespace ECAClientUtilities.Template.FSharp
             return char.ToLower(fieldName[0]) + fieldName.Substring(1);
         }
 
-        private string GetDefaultValue(DataType type)
+        private string GetDefaultDataValue(DataType type)
         {
             DataType underlyingType = (type as ArrayType)?.UnderlyingType ?? type;
             string defaultValue;
@@ -189,6 +266,27 @@ namespace ECAClientUtilities.Template.FSharp
                 defaultValue = $"[| {defaultValue} |]";
 
             return defaultValue;
+        }
+
+        private string GetDefaultMetaValue(DataType type)
+        {
+            DataType underlyingType = (type as ArrayType)?.UnderlyingType ?? type;
+            string defaultValue;
+
+            // Namespace: ProjectName.Model.Category
+            // TypeName: Identifier
+            if (!m_primitiveDefaultValues.TryGetValue($"{underlyingType.Category}.{underlyingType.Identifier}", out defaultValue))
+            {
+                if (type.IsArray)
+                    return $"[| new {ProjectName}.Model.{underlyingType.Category}.{GetMetaIdentifier(underlyingType.Identifier)}() |]";
+
+                return $"new {ProjectName}.Model.{underlyingType.Category}.{GetMetaIdentifier(underlyingType.Identifier)}()";
+            }
+
+            if (type.IsArray)
+                return "[| new MetaValues() |]";
+
+            return "new MetaValues()";
         }
 
         #endregion

@@ -318,6 +318,7 @@
     <Content Include="wwwroot\Images\StatusLights\Small\magentalight.png" />
     <Content Include="wwwroot\Images\StatusLights\Small\redlight.png" />
     <Content Include="wwwroot\Images\StatusLights\Small\yellowlight.png" />
+    <Content Include="wwwroot\Scripts\angular.js" />
     <Content Include="wwwroot\Scripts\bootstrap-datepicker.js" />
     <Content Include="wwwroot\Scripts\bootstrap-datepicker.min.js" />
     <Content Include="wwwroot\Scripts\bootstrap-multiselect.js" />
@@ -382,6 +383,8 @@
     <Content Include="wwwroot\Scripts\jquery.validate.unobtrusive.js" />
     <Content Include="wwwroot\Scripts\jquery.validate.unobtrusive.min.js" />
     <Content Include="wwwroot\Scripts\js.cookie.js" />
+    <Content Include="wwwroot\Scripts\json2.js" />
+    <Content Include="wwwroot\Scripts\jstorage.js" />
     <Content Include="wwwroot\Scripts\knockout-3.4.0.debug.js" />
     <Content Include="wwwroot\Scripts\knockout-3.4.0.js" />
     <Content Include="wwwroot\Scripts\knockout.mapping-latest.debug.js" />
@@ -427,6 +430,10 @@
       <Project>{9b1c56ac-dda1-48c0-9ea3-96d51159e708}</Project>
       <Name>ECAClientUtilities</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\..\Libraries\ECACommonUtilities\ECACommonUtilities.csproj">
+      <Project>{ee69339a-0bd8-4281-b546-6c4c8815b388}</Project>
+      <Name>ECACommonUtilities</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
@@ -444,7 +451,7 @@ CALL "$(ProjectDir)PostBuildSetup.bat" "$(ProjectDir)bin" "$(TargetDir)*.dll"
 CALL "$(ProjectDir)PostBuildSetup.bat" "$(TargetDir)Templates\" "$(SolutionDir)Templates"</PostBuildEvent>
   </PropertyGroup>
   <Target Name="AfterBuild">
-    <CallTarget Targets="SignBuild"/>
+    <CallTarget Targets="SignBuild" />
   </Target>
   <Target Name="SignBuild" Condition="'$(SIGNTOOL)' != ''">
     <Exec Command="$(SIGNTOOL) $(TargetPath)" />

@@ -33,13 +33,13 @@ SET git="%PROGRAMFILES(X86)%\Git\cmd\git.exe"
 SET replace="\\GPAWEB\NightlyBuilds\Tools\ReplaceInFiles\ReplaceInFiles.exe"
 
 SET remote="git@github.com:GridProtectionAlliance/openECA.git"
-SET source="\\GPAWEB\NightlyBuilds\GridSolutionsFramework\ECA\Libraries\*.*"
+SET source="\\GPAWEB\NightlyBuilds\GridSolutionsFramework\Beta\Libraries\*.*"
 SET target="Source\Dependencies\GSF"
-SET sourcemasterbuild="\\GPAWEB\NightlyBuilds\GridSolutionsFramework\ECA\Build Scripts\MasterBuild.buildproj"
+SET sourcemasterbuild="\\GPAWEB\NightlyBuilds\GridSolutionsFramework\Beta\Build Scripts\MasterBuild.buildproj"
 SET targetmasterbuild="Build\Scripts"
 SET sourceschema=Source\Dependencies\GSF\Data
 SET targetschema=Source\Data
-SET sourcetools=\\GPAWEB\NightlyBuilds\GridSolutionsFramework\ECA\Tools\
+SET sourcetools=\\GPAWEB\NightlyBuilds\GridSolutionsFramework\Beta\Tools\
 SET targettools=Source\Applications\openECA\openECASetup\
 
 ECHO.
@@ -73,6 +73,7 @@ XCOPY "%sourcetools%HistorianView\HistorianView.exe" "%targettools%HistorianView
 XCOPY "%sourcetools%StatHistorianReportGenerator\StatHistorianReportGenerator.exe" "%targettools%StatHistorianReportGenerator.exe" /Y
 XCOPY "%sourcetools%NoInetFixUtil\NoInetFixUtil.exe" "%targettools%NoInetFixUtil.exe" /Y
 XCOPY "%sourcetools%DNP3ConfigGenerator\DNP3ConfigGenerator.exe" "%targettools%DNP3ConfigGenerator.exe" /Y
+XCOPY "%sourcetools%LogFileViewer\LogFileViewer.exe" "%targettools%LogFileViewer.exe" /Y
 
 ECHO.
 ECHO Updating database schema defintions...

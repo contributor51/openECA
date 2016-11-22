@@ -24,20 +24,21 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ECAClientUtilities;
-using ECAClientUtilities.Model;
+using ECACommonUtilities;
+using ECACommonUtilities.Model;
 using GSF.Configuration;
 using GSF.IO;
 using GSF.Web.Security;
 using Microsoft.AspNet.SignalR;
 using openECAClient.Model;
 
-using DataType = ECAClientUtilities.Model.DataType;
+using DataType = ECACommonUtilities.Model.DataType;
 using Measurement = openECAClient.Model.Measurement;
 
 namespace openECAClient
@@ -206,12 +207,172 @@ namespace openECAClient
 
         public void AddMapping(TypeMapping typeMapping)
         {
-            MappingWriter mappingWriter = new MappingWriter();
+            TypeMapping tm = ParseTimeWindow(typeMapping);
 
-            mappingWriter.Mappings.Add(typeMapping);
+            MappingWriter mappingWriter = new MappingWriter();
+            
+            mappingWriter.Mappings.Add(tm);
 
             lock (s_udmLock)
                 mappingWriter.WriteFiles(s_udmDirectory);
+        }
+
+        private TypeMapping ParseTimeWindow(TypeMapping typeMapping)
+        {
+            for(int i = 0; i < typeMapping.FieldMappings.Count; ++i)
+            {
+                
+                if (typeMapping.FieldMappings[i].TimeWindowExpression != "")
+                {
+                    try
+                    {
+                        int index = 0;
+
+                        string[] parts = typeMapping.FieldMappings[i].TimeWindowExpression.Split(new char[0], StringSplitOptions.RemoveEmptyEntries);
+
+                        if (parts[index].Equals("last", StringComparison.OrdinalIgnoreCase))
+                        {
+                            ArrayMapping am = new ArrayMapping();
+                            am.Field = typeMapping.FieldMappings[i].Field;
+                            am.Expression = typeMapping.FieldMappings[i].Expression;
+                            am.RelativeTime = typeMapping.FieldMappings[i].RelativeTime;
+                            am.RelativeUnit = typeMapping.FieldMappings[i].RelativeUnit;
+                            am.SampleRate = typeMapping.FieldMappings[i].SampleRate;
+                            am.SampleUnit = typeMapping.FieldMappings[i].SampleUnit;
+                            am.TimeWindowExpression = "";
+
+                            am.WindowSize = Convert.ToDecimal(parts[++index]);
+                            ++index;
+
+                            if (parts[index].Equals("points", StringComparison.OrdinalIgnoreCase))
+                            {
+                                index += 2;
+                                
+                                am.WindowUnit = TimeSpan.Zero;
+                                if (parts.Length - 1 > index)
+                                {
+                                    am.SampleRate = Convert.ToDecimal(parts[index]);
+                                    index += 2;
+                                    am.SampleUnit = GetTimeSpan(parts[index]);
+                                }
+                            }
+                            else
+                            {
+                                am.WindowUnit = GetTimeSpan(parts[index]);
+                                index += 2;
+                                if (parts.Length - 1 > index)
+                                {
+                                    am.SampleRate = Convert.ToDecimal(parts[index]);
+                                    index += 2;
+                                    am.SampleUnit = GetTimeSpan(parts[index]);
+                                }
+                            }
+
+                            typeMapping.FieldMappings.RemoveAt(i);
+                            am.TimeWindowExpression = "";
+                            typeMapping.FieldMappings.Insert(i,am);
+
+                        }
+                        else if (parts[index].Equals("from", StringComparison.OrdinalIgnoreCase))
+                        {
+                            ArrayMapping am = new ArrayMapping();
+                            am.Field = typeMapping.FieldMappings[i].Field;
+                            am.Expression = typeMapping.FieldMappings[i].Expression;
+                            am.RelativeTime = typeMapping.FieldMappings[i].RelativeTime;
+                            am.RelativeUnit = typeMapping.FieldMappings[i].RelativeUnit;
+                            am.SampleRate = typeMapping.FieldMappings[i].SampleRate;
+                            am.SampleUnit = typeMapping.FieldMappings[i].SampleUnit;
+                            am.TimeWindowExpression = "";
+
+                            am.RelativeTime = Convert.ToDecimal(parts[++index]);
+                            ++index;
+
+                            if (parts[index].Equals("points", StringComparison.OrdinalIgnoreCase))
+                                am.RelativeUnit = TimeSpan.Zero;
+                            else
+                                am.RelativeUnit = GetTimeSpan(parts[index]);
+
+                            index += 3;
+
+                            am.WindowSize = Convert.ToDecimal(parts[index++]);
+
+                            if(parts[index].Equals("points", StringComparison.OrdinalIgnoreCase))
+                                am.WindowUnit = TimeSpan.Zero;
+                            else
+                                am.WindowUnit = GetTimeSpan(parts[index]);
+
+                            if(parts.Length > ++index)
+                            {
+                                am.SampleRate = Convert.ToDecimal(parts[++index]);
+                                index += 2;
+                                am.SampleUnit = GetTimeSpan(parts[index]);
+                            }
+
+                            typeMapping.FieldMappings.RemoveAt(i);
+                            am.TimeWindowExpression = "";
+                            typeMapping.FieldMappings.Insert(i, am);
+
+
+                        }
+                        else
+                        {
+                            typeMapping.FieldMappings[i].RelativeTime = Convert.ToDecimal(parts[index]);
+                            ++index;
+
+                            if (parts[index].Equals("points", StringComparison.OrdinalIgnoreCase))
+                            {
+                                index +=3;
+                                typeMapping.FieldMappings[i].RelativeUnit = TimeSpan.Zero;
+                                if(parts.Length > index)
+                                {
+                                    typeMapping.FieldMappings[i].SampleRate = Convert.ToDecimal(parts[index]);
+                                    index += 2;
+                                    typeMapping.FieldMappings[i].SampleUnit = GetTimeSpan(parts[index]);
+                                }
+                            }
+                            else
+                            {
+                                typeMapping.FieldMappings[i].RelativeUnit = GetTimeSpan(parts[index]);
+                                index += 3;
+                                if (parts.Length - 1  > index)
+                                {
+                                    typeMapping.FieldMappings[i].SampleRate = Convert.ToDecimal(parts[index]);
+                                    index += 2;
+                                    typeMapping.FieldMappings[i].SampleUnit = GetTimeSpan(parts[index]);
+                                }
+                            }
+                        }
+                    }
+                    catch(Exception)
+                    {
+                        
+                    }
+                }
+            }
+
+            return typeMapping;
+        }
+
+        private TimeSpan GetTimeSpan(string unit)
+        {
+            switch (unit)
+            {
+                case "microseconds":
+                    return TimeSpan.FromTicks(10);
+                case "milliseconds":
+                    return new TimeSpan(0, 0, 0, 0, 1);
+                case "seconds":
+                    return new TimeSpan(0, 0, 0, 1, 0);
+                case "minutes":
+                    return new TimeSpan(0, 0, 1, 0, 0);
+                case "hours":
+                    return new TimeSpan(0, 1, 0, 0, 0);
+                case "days":
+                    return new TimeSpan(1, 0, 0, 0, 0);
+                default:
+                    return TimeSpan.FromTicks(10);
+            }
+
         }
 
         public List<DataType> GetEnumeratedReferenceTypes(DataType dataType)
@@ -500,6 +661,15 @@ namespace openECAClient
             }
         }
 
+        public bool CheckProjectName(string projectName, string targetDirectory)
+        {
+            if (Directory.Exists(targetDirectory))
+            {
+                return true;
+            }
+            return false;    
+        }
+
         public string GetUDTFileDirectory()
         {
             return s_udtDirectory;
@@ -617,6 +787,11 @@ namespace openECAClient
         public void InitializeSubscriptions()
         {
             Client.InitializeSubscriptions();
+        }
+
+        public void RegisterMetadataRecieved(Action callback)
+        {
+            Client.MetadataReceived += callback;
         }
 
         public void TerminateSubscriptions()

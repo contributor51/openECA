@@ -25,8 +25,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using ECAClientUtilities.Model;
+using ECACommonUtilities;
+using ECACommonUtilities.Model;
 
+// ReSharper disable RedundantStringInterpolation
 namespace ECAClientUtilities.Template.Matlab
 {
     public class ProjectGenerator : DotNetProjectGeneratorBase
@@ -91,9 +93,9 @@ namespace ECAClientUtilities.Template.Matlab
 
         #region [ Methods ]
 
-        protected override string ConstructModel(UserDefinedType type)
+        protected override string ConstructDataModel(UserDefinedType type)
         {
-            string fieldList = string.Join(", ", type.Fields.Select(field => $"'{field.Identifier}', {GetDefaultValue(field.Type)}"));
+            string fieldList = string.Join(", ", type.Fields.Select(field => $"'{field.Identifier}', {GetDefaultDataValue(field.Type)}"));
 
             // Generate the contents of the class file
             return GetTextFromResource("ECAClientUtilities.Template.Matlab.UDTTemplate.txt")
@@ -103,7 +105,19 @@ namespace ECAClientUtilities.Template.Matlab
                 .Replace("{Fields}", fieldList.Trim());
         }
 
-        protected override string ConstructMapping(UserDefinedType type)
+        protected override string ConstructMetaModel(UserDefinedType type)
+        {
+            string fieldList = string.Join(", ", type.Fields.Select(field => $"'{field.Identifier}', {GetDefaultMetaValue(field.Type)}"));
+
+            // Generate the contents of the class file
+            return GetTextFromResource("ECAClientUtilities.Template.Matlab.UDTTemplate.txt")
+                .Replace("{ProjectName}", ProjectName)
+                .Replace("{Category}", type.Category)
+                .Replace("{Identifier}", GetMetaIdentifier(type.Identifier))
+                .Replace("{Fields}", fieldList.Trim());
+        }
+
+        protected override string ConstructMapping(UserDefinedType type, bool isMetaType)
         {
             StringBuilder mappingCode = new StringBuilder();
 
@@ -112,42 +126,72 @@ namespace ECAClientUtilities.Template.Matlab
                 // Get the field type and its
                 // underlying type if it is an array
                 DataType fieldType = field.Type;
-                DataType underlyingType = (field.Type as ArrayType)?.UnderlyingType;
+                DataType underlyingType = (fieldType as ArrayType)?.UnderlyingType;
+                string fieldIdentifier = field.Identifier;
 
                 // For user-defined types, call the method to generate an object of their corresponding data type
                 // For primitive types, call the method to get the values of the mapped measurements
                 // ReSharper disable once PossibleNullReferenceException
                 if (fieldType.IsArray && underlyingType.IsUserDefined)
                 {
-                    mappingCode.AppendLine($"            typeMappings = NET.invokeGenericMethod('System.Linq.Enumerable', 'ToArray', {{'ECAClientUtilities.Model.TypeMapping'}}, this.m_helper.MappingCompiler.EnumerateTypeMappings(fieldLookup.Item('{field.Identifier}').Expression));");
+                    string arrayTypeName = GetTypeName(underlyingType, isMetaType);
+
+                    mappingCode.AppendLine($"            % Create {arrayTypeName} UDT array for \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            this.m_helper.PushCurrentFrame();");
                     mappingCode.AppendLine();
-                    mappingCode.AppendLine("            for i = 1:typeMappings.Length()");
-                    mappingCode.AppendLine($"                udt.Phasors(i) = this.Create{underlyingType.Category}{underlyingType.Identifier}(typeMappings(i));");
-                    mappingCode.AppendLine("            end");
+                    mappingCode.AppendLine($"            arrayMapping = fieldLookup.Item('{fieldIdentifier}');");
+                    mappingCode.AppendLine($"            count = this.m_helper.GetUDTArrayTypeMappingCount(arrayMapping);");
+                    mappingCode.AppendLine();
+                    mappingCode.AppendLine($"            for i = 1:count");
+                    mappingCode.AppendLine($"                nestedMapping = this.m_helper.GetUDTArrayTypeMapping(arrayMapping, i - 1);");
+                    mappingCode.AppendLine($"                udt.{fieldIdentifier}(i) = this.Create{underlyingType.Category}{GetIdentifier(underlyingType, isMetaType)}(nestedMapping));");
+                    mappingCode.AppendLine($"            end");
+                    mappingCode.AppendLine();
+                    mappingCode.AppendLine($"            this.m_helper.PopCurrentFrame();");
                 }
                 else if (fieldType.IsUserDefined)
                 {
-                    mappingCode.AppendLine($"            udt.{field.Identifier} = this.Create{field.Type.Category}{field.Type.Identifier}(this.m_helper.MappingCompiler.GetTypeMapping(fieldLookup.Item('{field.Identifier}').Expression));");
+                    string fieldTypeName = GetTypeName(fieldType, isMetaType);
+
+                    mappingCode.AppendLine($"            % Create {fieldTypeName} UDT for \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            fieldMapping = fieldLookup.Item('{fieldIdentifier}');");
+                    mappingCode.AppendLine($"            nestedMapping = this.m_helper.GetTypeMapping(fieldMapping);");
+                    mappingCode.AppendLine();
+                    mappingCode.AppendLine($"            this.m_helper.PushRelativeFrame(fieldMapping);");
+                    mappingCode.AppendLine($"            udt.{fieldIdentifier} = this.Create{fieldType.Category}{GetIdentifier(fieldType, isMetaType)}(nestedMapping);");
+                    mappingCode.AppendLine($"            this.m_helper.PopRelativeFrame(fieldMapping);");
                 }
                 else if (fieldType.IsArray)
                 {
                     bool forceToString;
                     string conversionFunction = GetConversionFunction(underlyingType, out forceToString);
+                    string arrayTypeName = GetTypeName(underlyingType, isMetaType);
 
-                    mappingCode.AppendLine("            measurements = this.m_helper.SignalLookup.GetMeasurements(this.m_helper.Keys.Item(this.m_index));");
-                    mappingCode.AppendLine("            this.m_index = this.m_index + 1;");
+                    mappingCode.AppendLine($"            % Create {arrayTypeName} array for \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            arrayMapping = fieldLookup.Item('{fieldIdentifier}');");
+                    mappingCode.AppendLine($"            count = this.m_helper.GetArrayMeasurementCount(arrayMapping);");
                     mappingCode.AppendLine();
-                    mappingCode.AppendLine("            for i = 1:measurements.Length()");
-                    mappingCode.AppendLine($"                udt.{field.Identifier} (i) = {conversionFunction}(measurements(i).Value{(forceToString ? ".ToString()" : "")});");
-                    mappingCode.AppendLine("            end");
+                    mappingCode.AppendLine($"            for i = 1:count");
+                    mappingCode.AppendLine($"                measurement = this.m_helper.GetArrayMeasurement(i - 1);");
+                    if (isMetaType)
+                        mappingCode.AppendLine($"                udt.{fieldIdentifier}(i) = this.m_helper.GetMetaValues(measurement);");
+                    else
+                        mappingCode.AppendLine($"                udt.{fieldIdentifier}(i) = {conversionFunction}(measurement.Value{(forceToString ? ".ToString()" : "")});");
+                    mappingCode.AppendLine($"            end");
                 }
                 else
                 {
                     bool forceToString;
-                    string conversionFunction = GetConversionFunction(field.Type, out forceToString);
+                    string conversionFunction = GetConversionFunction(fieldType, out forceToString);
+                    string fieldTypeName = GetTypeName(fieldType, isMetaType);
 
-                    mappingCode.AppendLine($"            udt.{field.Identifier} = {conversionFunction}(this.m_helper.SignalLookup.GetMeasurement(this.m_helper.Keys.Item(this.m_index).Get(0)).Value{(forceToString ? ".ToString()" : "")});");
-                    mappingCode.AppendLine("            this.m_index = this.m_index + 1;");
+                    mappingCode.AppendLine($"            % Assign {fieldTypeName} value to \"{fieldIdentifier}\" field");
+                    mappingCode.AppendLine($"            fieldMapping = fieldLookup.Item('{fieldIdentifier}');");
+                    mappingCode.AppendLine($"            measurement = this.m_helper.GetMeasurement(fieldMapping);");
+                    if (isMetaType)
+                        mappingCode.AppendLine($"            udt.{fieldIdentifier} = this.m_helper.GetMetaValues(measurement);");
+                    else
+                        mappingCode.AppendLine($"            udt.{fieldIdentifier} = {conversionFunction}(measurement.Value{(forceToString ? ".ToString()" : "")});");
                 }
 
                 mappingCode.AppendLine();
@@ -191,7 +235,7 @@ namespace ECAClientUtilities.Template.Matlab
             // MATLAB template doesn't use a project file...
         }
 
-        private string GetDefaultValue(DataType type)
+        private string GetDefaultDataValue(DataType type)
         {
             DataType underlyingType = (type as ArrayType)?.UnderlyingType ?? type;
             string defaultValue;
@@ -202,6 +246,19 @@ namespace ECAClientUtilities.Template.Matlab
                 defaultValue = $"{underlyingType.Identifier}()";
 
             return defaultValue;
+        }
+
+        private string GetDefaultMetaValue(DataType type)
+        {
+            DataType underlyingType = (type as ArrayType)?.UnderlyingType ?? type;
+            string defaultValue;
+
+            // Namespace: ProjectName.Model.Category
+            // TypeName: Identifier
+            if (!m_primitiveDefaultValues.TryGetValue($"{underlyingType.Category}.{underlyingType.Identifier}", out defaultValue))
+                return GetMetaIdentifier(underlyingType.Identifier);
+
+            return "MetaValues()";
         }
 
         private string GetConversionFunction(DataType type, out bool forceToString)

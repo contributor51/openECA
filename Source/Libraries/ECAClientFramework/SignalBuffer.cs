@@ -133,12 +133,10 @@ namespace ECAClientFramework
                 // can be better managed by the garbage collector
                 IMeasurement blockMeasurement = m_measurements[m_endIndex++];
 
-                blockMeasurement.Key = measurement.Key;
+                blockMeasurement.Metadata = measurement.Metadata;
                 blockMeasurement.Timestamp = measurement.Timestamp;
                 blockMeasurement.Value = measurement.Value;
                 blockMeasurement.StateFlags = measurement.StateFlags;
-                blockMeasurement.Adder = measurement.Adder;
-                blockMeasurement.Multiplier = measurement.Multiplier;
                 blockMeasurement.PublishedTimestamp = measurement.PublishedTimestamp;
                 blockMeasurement.ReceivedTimestamp = measurement.ReceivedTimestamp;
 
@@ -172,7 +170,7 @@ namespace ECAClientFramework
                         break;
 
                     if (m_measurements[mid].Timestamp < timestamp)
-                        min = mid;
+                        min = mid + 1;
                     else
                         max = mid;
 
@@ -308,7 +306,7 @@ namespace ECAClientFramework
                 blockIndex = ToBlockIndex(absoluteIndex - 1);
                 measurementIndex = ToMeasurementIndex(absoluteIndex - 1);
 
-                if (blockIndex >= 0)
+                if (blockIndex >= 0 && measurementIndex >= 0)
                     leftMeasurement = m_blocks[blockIndex][measurementIndex];
                 else
                     leftMeasurement = null;
@@ -395,7 +393,7 @@ namespace ECAClientFramework
 
             int min = 0;
             int max = m_blocks[endBlock].Count > 0 ? endBlock : endBlock - 1;
-            int mid = (min + max) / 2;
+            int mid = (min + max + 1) / 2;
 
             while (min < max)
             {
@@ -405,9 +403,9 @@ namespace ECAClientFramework
                 if (m_blocks[mid].Timestamp < timestamp)
                     min = mid;
                 else
-                    max = mid;
+                    max = mid - 1;
 
-                mid = (min + max) / 2;
+                mid = (min + max + 1) / 2;
             }
 
             return mid;
@@ -456,7 +454,7 @@ namespace ECAClientFramework
             m_removedBlockCounts.Add(unusedBlockCount);
 
             if (m_removedBlockCounts[StatWindow - 1] != Sentinel)
-                retainedBlockCount = (int)Math.Ceiling(m_removedBlockCounts.Average()) + 1;
+                retainedBlockCount = Math.Min((int)Math.Ceiling(m_removedBlockCounts.Average()) + 1, unusedBlockCount);
 
             List<MeasurementBlock> retainedBlocks = m_blocks.GetRange(0, retainedBlockCount);
 

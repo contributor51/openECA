@@ -15,18 +15,11 @@ Namespace Model
     Public Class Mapper ' For {ProjectName}
         Inherits MapperBase
     
-        #Region " Members "
-
-        ' Fields
-        Private m_index As Integer
-
-        #End Region
-
         #Region " Constructors "
 
-        Public Sub New(lookup As SignalLookup)
+        Public Sub New(framework As Framework)
         
-            MyBase.New(lookup, "{InputMapping}")
+            MyBase.New(framework, "{InputMapping}")
 
         End Sub
 
@@ -36,13 +29,14 @@ Namespace Model
 
         Public Overrides Sub Map(measurements As IDictionary(Of MeasurementKey, IMeasurement))
 
-            m_index = 0
             SignalLookup.UpdateMeasurementLookup(measurements)
             Dim mapping As TypeMapping = MappingCompiler.GetTypeMapping(InputMapping)
 
-            Dim input As {InputTypeName} = Create{InputCategoryIdentifier}{InputTypeIdentifier}(mapping)
+            Dim inputData As {InputDataTypeName} = Create{InputCategoryIdentifier}{InputDataTypeIdentifier}(mapping)
+            KeyIndex = 0
+            Dim inputMeta As {InputMetaTypeName} = Create{InputCategoryIdentifier}{InputMetaTypeIdentifier}(mapping)
             
-            Dim output As {OutputTypeName} = Algorithm.Execute(input)
+            Dim outputData As {OutputDataTypeName} = Algorithm.Execute(inputData, inputMeta)
 
             ' TODO: Later versions will publish output To the openECA server
 

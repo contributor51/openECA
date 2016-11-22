@@ -692,6 +692,16 @@
             <param name="configurationFrame">Associated <see cref="T:GSF.PhasorProtocols.IEEEC37_118.ConfigurationFrame1"/> for the new <see cref="T:GSF.PhasorProtocols.IEEEC37_118.DataFrame"/>.</param>
             <returns>New IEEE C37.118 <see cref="T:GSF.PhasorProtocols.IEEEC37_118.DataFrame"/> at given <paramref name="timestamp"/>.</returns>
         </member>
+        <member name="M:PhasorProtocolAdapters.IeeeC37_118.Concentrator.CastToConfigurationFrame1(GSF.PhasorProtocols.IEEEC37_118.ConfigurationFrame2)">
+            <summary>
+            Converts given IEEE C37.118 type 2 <paramref name="sourceFrame"/> into a type 1 configuration frame.
+            </summary>
+            <param name="sourceFrame">Source configuration frame.</param>
+            <returns>New <see cref="T:GSF.PhasorProtocols.IEEEC37_118.ConfigurationFrame1"/> frame based on source configuration.</returns>
+            <remarks>
+            This function allow an explicit downcast of a typical IEEE C37.118 configuration type 2 frame to a type 1 frame.
+            </remarks>
+        </member>
         <member name="T:PhasorProtocolAdapters.PhasorDataConcentratorBase">
             <summary>
             Represents an <see cref="T:GSF.TimeSeries.Adapters.IActionAdapter"/> used to generate and transmit concentrated stream
@@ -841,6 +851,11 @@
         <member name="P:PhasorProtocolAdapters.PhasorDataConcentratorBase.CommandChannel">
             <summary>
             Gets or sets reference to <see cref="T:GSF.Communication.TcpServer"/> command channel, attaching and/or detaching to events as needed.
+            </summary>
+        </member>
+        <member name="P:PhasorProtocolAdapters.PhasorDataConcentratorBase.DataSource">
+            <summary>
+            Gets or sets <see cref="T:System.Data.DataSet"/> based data source available to this <see cref="T:PhasorProtocolAdapters.PhasorDataConcentratorBase"/>.
             </summary>
         </member>
         <member name="P:PhasorProtocolAdapters.PhasorDataConcentratorBase.SupportsTemporalProcessing">
@@ -1351,17 +1366,13 @@
             Attempts to disconnect from data input source.
             </summary>
         </member>
-        <member name="M:PhasorProtocolAdapters.PhasorMeasurementMapper.MapMeasurementAttributes(System.Collections.Generic.List{GSF.TimeSeries.IMeasurement},System.String,GSF.TimeSeries.IMeasurement)">
+        <member name="M:PhasorProtocolAdapters.PhasorMeasurementMapper.MapMeasurementAttributes(System.Collections.Generic.List{GSF.TimeSeries.IMeasurement},GSF.TimeSeries.MeasurementMetadata,GSF.TimeSeries.IMeasurement)">
             <summary>
             Map parsed measurement value to defined measurement attributes (i.e., assign meta-data to parsed measured value).
             </summary>
             <param name="mappedMeasurements">Destination collection for the mapped measurement values.</param>
-            <param name="signalReference">Derived <see cref="T:GSF.Units.EE.SignalReference"/> string for the parsed measurement value.</param>
+            <param name="metadata">The metadata to assign</param>
             <param name="parsedMeasurement">The parsed <see cref="T:GSF.TimeSeries.IMeasurement"/> value.</param>
-            <remarks>
-            This procedure is used to identify a parsed measurement value by its derived signal reference and apply the
-            additional needed measurement meta-data attributes (i.e., ID, Source, Adder and Multiplier).
-            </remarks>
         </member>
         <member name="M:PhasorProtocolAdapters.PhasorMeasurementMapper.ExtractFrameMeasurements(GSF.PhasorProtocols.IDataFrame)">
             <summary>
@@ -1419,7 +1430,7 @@
         </member>
         <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.TagName">
             <summary>
-            Gets or sets the text based tag name of this <see cref="T:PhasorProtocolAdapters.SignalReferenceMeasurement"/>.
+            Gets the text based tag name of this <see cref="T:PhasorProtocolAdapters.SignalReferenceMeasurement"/>.
             </summary>
         </member>
         <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.Value">
@@ -1439,12 +1450,12 @@
         </member>
         <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.Adder">
             <summary>
-            Gets or sets an offset to add to the measurement value. This defaults to 0.0.
+            Gets an offset to add to the measurement value. This defaults to 0.0.
             </summary>
         </member>
         <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.Multiplier">
             <summary>
-            Defines a mulplicative offset to apply to the measurement value. This defaults to 1.0.
+            Gets a multiplicative offset to apply to the measurement value. This defaults to 1.0.
             </summary>
         </member>
         <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.Timestamp">
@@ -1474,7 +1485,12 @@
         </member>
         <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.MeasurementValueFilter">
             <summary>
-            Gets or sets function used to apply a downsampling filter over a sequence of <see cref="T:GSF.TimeSeries.IMeasurement"/> values.
+            Gets function used to apply a downsampling filter over a sequence of <see cref="T:GSF.TimeSeries.IMeasurement"/> values.
+            </summary>
+        </member>
+        <member name="P:PhasorProtocolAdapters.SignalReferenceMeasurement.Metadata">
+            <summary>
+            Gets or sets associated metadata values for the <see cref="T:GSF.TimeSeries.IMeasurement"/> .
             </summary>
         </member>
         <member name="M:PhasorProtocolAdapters.SignalReferenceMeasurement.Equals(GSF.TimeSeries.ITimeSeriesValue)">
